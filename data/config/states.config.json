@@ -1,0 +1,39 @@
+{
+  "states": [
+    "idle",
+    "coding",
+    "thinking",
+    "success",
+    "error",
+    "reminder",
+    "sleep",
+    "weather"
+  ],
+  "idleVariants": [
+    "idle_reading",
+    "idle_yawn",
+    "idle_hair"
+  ],
+  "pa0KeyframeFolders": [
+    "idle",
+    "coding",
+    "thinking",
+    "success",
+    "error",
+    "reminder",
+    "sleep",
+    "idle_reading",
+    "idle_yawn",
+    "idle_hair"
+  ],
+  "priorities": {
+    "error": 1,
+    "reminder": 2,
+    "coding": 3,
+    "thinking": 4,
+    "success": 5,
+    "weather": 6,
+    "sleep": 7,
+    "idle": 8
+  }
+}

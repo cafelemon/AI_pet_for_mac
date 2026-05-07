@@ -1,0 +1,28 @@
+{
+  "name": "desktop-ai-companion",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Desktop AI Companion project scaffold.",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "asset:check": "python3 scripts/asset_check.py",
+    "asset:check:strict": "python3 scripts/asset_check.py --strict"
+  },
+  "dependencies": {
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "^42.0.0",
+    "electron-vite": "^5.0.0",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.2"
+  }
+}

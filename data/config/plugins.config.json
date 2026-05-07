@@ -1,0 +1,17 @@
+{
+  "plugins": {
+    "codex_plugin": {
+      "enabled": false
+    },
+    "weather_plugin": {
+      "enabled": false
+    },
+    "reminder_plugin": {
+      "enabled": false
+    },
+    "calendar_plugin": {
+      "enabled": false
+    }
+  }
+}
+
