@@ -1,6 +1,55 @@
 import { contextBridge, ipcRenderer } from 'electron';
+import type { IpcRendererEvent } from 'electron';
 
-import type { CompanionAPI, CompanionConfig, StatesConfig } from '../shared/types';
+import type {
+  CodexRenderState,
+  CompanionAPI,
+  CompanionCommand,
+  CompanionConfig,
+  ControlCenterModule,
+  CreateReminderInput,
+  CreateTaskInput,
+  InputPermissionStatus,
+  ManualRenderSelection,
+  MouseHitRegion,
+  MouseMode,
+  MouseHitTestPoint,
+  ReminderNotification,
+  ReminderRecord,
+  ShortcutBinding,
+  StatesConfig,
+  TaskCenterSnapshot,
+  TaskNotification,
+  TaskRecord,
+  TaskStatus,
+  WindowControls
+} from '../shared/types';
+
+const COMPANION_COMMAND_CHANNEL = 'companion:command';
+const CODEX_RUNTIME_STATE_CHANNEL = 'codex:runtime-state';
+const REMINDER_RUNTIME_STATE_CHANNEL = 'reminder:runtime-state';
+const REMINDERS_UPDATED_CHANNEL = 'reminder:updated';
+const TASK_NOTIFICATION_CHANNEL = 'task:notification';
+const TASKS_UPDATED_CHANNEL = 'task:updated';
+const MOUSE_HIT_TEST_SAMPLE_CHANNEL = 'mouse:hit-test-sample';
+const MANUAL_RENDER_SELECTION_CHANNEL = 'render:manual-selection';
+const CONTROL_CENTER_MODULE_CHANNEL = 'control-center:module';
+const SHORTCUTS_UPDATED_CHANNEL = 'shortcuts:updated';
+const INPUT_PERMISSION_STATUS_CHANNEL = 'input-permission:status';
+const COMPANION_COMMANDS = new Set<CompanionCommand>([
+  'next-state',
+  'previous-state',
+  'reset-idle',
+  'open-control-center',
+  'toggle-control-center',
+  'toggle-panel',
+  'toggle-passthrough',
+  'toggle-reminders',
+  'toggle-tasks',
+  'scale-up',
+  'scale-down',
+  'scale-reset'
+]);
 
 function encodeAssetPath(relativePath: string): string {
   return relativePath
@@ -13,7 +62,165 @@ function encodeAssetPath(relativePath: string): string {
 const companionAPI: CompanionAPI = {
   getCompanionConfig: () => ipcRenderer.invoke('config:get-companion') as Promise<CompanionConfig>,
   getStatesConfig: () => ipcRenderer.invoke('config:get-states') as Promise<StatesConfig>,
-  assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`
+  assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`,
+  getCodexRuntimeState: () => ipcRenderer.invoke('codex:get-runtime-state') as Promise<CodexRenderState | null>,
+  getReminderRuntimeState: () =>
+    ipcRenderer.invoke('reminders:get-runtime-state') as Promise<ReminderNotification | null>,
+  listReminders: () => ipcRenderer.invoke('reminders:list') as Promise<ReminderRecord[]>,
+  createReminder: (input: CreateReminderInput) =>
+    ipcRenderer.invoke('reminders:create', input) as Promise<ReminderRecord>,
+  dismissReminder: (id: number) => ipcRenderer.invoke('reminders:dismiss', id) as Promise<ReminderRecord | null>,
+  dismissReminderNotification: (id: number) =>
+    ipcRenderer.invoke('reminders:dismiss-notification', id) as Promise<ReminderRecord | null>,
+  snoozeReminder: (id: number, minutes: number) =>
+    ipcRenderer.invoke('reminders:snooze', id, minutes) as Promise<ReminderRecord | null>,
+  listTasks: () => ipcRenderer.invoke('tasks:list') as Promise<TaskCenterSnapshot>,
+  createTask: (input: CreateTaskInput) => ipcRenderer.invoke('tasks:create', input) as Promise<TaskRecord>,
+  updateTaskStatus: (id: number, status: TaskStatus) =>
+    ipcRenderer.invoke('tasks:update-status', id, status) as Promise<TaskRecord | null>,
+  deleteTask: (id: number) => ipcRenderer.invoke('tasks:delete', id) as Promise<boolean>,
+  getTaskNotification: () => ipcRenderer.invoke('tasks:get-notification') as Promise<TaskNotification | null>,
+  dismissTaskNotification: (id: number) =>
+    ipcRenderer.invoke('tasks:dismiss-notification', id) as Promise<TaskRecord | null>,
+  getWindowControls: () => ipcRenderer.invoke('window:get-controls') as Promise<WindowControls>,
+  setWindowScale: (scale: number) => ipcRenderer.invoke('window:set-scale', scale) as Promise<number>,
+  setMouseMode: (mode: MouseMode) => ipcRenderer.invoke('window:set-mouse-mode', mode) as Promise<WindowControls>,
+  setMouseHitTest: (canInteract: boolean) =>
+    ipcRenderer.invoke('window:set-mouse-hit-test', canInteract) as Promise<boolean>,
+  setMouseHitRegions: (regions: MouseHitRegion[]) =>
+    ipcRenderer.invoke('window:set-mouse-hit-regions', regions) as Promise<void>,
+  setWindowDragActive: (active: boolean) =>
+    ipcRenderer.invoke('window:set-drag-active', active) as Promise<void>,
+  moveWindowBy: (deltaX: number, deltaY: number) =>
+    ipcRenderer.invoke('window:move-by', deltaX, deltaY) as Promise<void>,
+  setMousePassthrough: (enabled: boolean) =>
+    ipcRenderer.invoke('window:set-mouse-passthrough', enabled) as Promise<boolean>,
+  getManualRenderSelection: () =>
+    ipcRenderer.invoke('render:get-manual-selection') as Promise<ManualRenderSelection | null>,
+  setManualRenderSelection: (selection: ManualRenderSelection) =>
+    ipcRenderer.invoke('render:set-manual-selection', selection) as Promise<ManualRenderSelection>,
+  getShortcuts: () => ipcRenderer.invoke('shortcuts:list') as Promise<ShortcutBinding[]>,
+  updateShortcut: (id: string, accelerator: string) =>
+    ipcRenderer.invoke('shortcuts:update', id, accelerator) as Promise<ShortcutBinding[]>,
+  resetShortcut: (id: string) => ipcRenderer.invoke('shortcuts:reset', id) as Promise<ShortcutBinding[]>,
+  getInputPermissionStatus: () =>
+    ipcRenderer.invoke('input-permission:get-status') as Promise<InputPermissionStatus>,
+  openInputPermissionSettings: () => ipcRenderer.invoke('input-permission:open-settings') as Promise<void>,
+  openControlCenter: (module?: ControlCenterModule) =>
+    ipcRenderer.invoke('control-center:open', module) as Promise<void>,
+  closeControlCenter: () => ipcRenderer.invoke('control-center:close') as Promise<void>,
+  onMouseHitTestSample: (callback) => {
+    const listener = (_event: IpcRendererEvent, point: MouseHitTestPoint): void => {
+      callback(point);
+    };
+
+    ipcRenderer.on(MOUSE_HIT_TEST_SAMPLE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(MOUSE_HIT_TEST_SAMPLE_CHANNEL, listener);
+    };
+  },
+  onCompanionCommand: (callback) => {
+    const listener = (_event: IpcRendererEvent, command: unknown): void => {
+      if (COMPANION_COMMANDS.has(command as CompanionCommand)) {
+        callback(command as CompanionCommand);
+      }
+    };
+
+    ipcRenderer.on(COMPANION_COMMAND_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(COMPANION_COMMAND_CHANNEL, listener);
+    };
+  },
+  onManualRenderSelection: (callback) => {
+    const listener = (_event: IpcRendererEvent, selection: ManualRenderSelection | null): void => {
+      callback(selection);
+    };
+
+    ipcRenderer.on(MANUAL_RENDER_SELECTION_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(MANUAL_RENDER_SELECTION_CHANNEL, listener);
+    };
+  },
+  onControlCenterModule: (callback) => {
+    const listener = (_event: IpcRendererEvent, module: ControlCenterModule): void => {
+      callback(module);
+    };
+
+    ipcRenderer.on(CONTROL_CENTER_MODULE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(CONTROL_CENTER_MODULE_CHANNEL, listener);
+    };
+  },
+  onShortcutsUpdated: (callback) => {
+    const listener = (_event: IpcRendererEvent, shortcuts: ShortcutBinding[]): void => {
+      callback(shortcuts);
+    };
+
+    ipcRenderer.on(SHORTCUTS_UPDATED_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(SHORTCUTS_UPDATED_CHANNEL, listener);
+    };
+  },
+  onInputPermissionStatus: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: InputPermissionStatus): void => {
+      callback(status);
+    };
+
+    ipcRenderer.on(INPUT_PERMISSION_STATUS_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(INPUT_PERMISSION_STATUS_CHANNEL, listener);
+    };
+  },
+  onCodexRuntimeState: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: CodexRenderState | null): void => {
+      callback(state);
+    };
+
+    ipcRenderer.on(CODEX_RUNTIME_STATE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(CODEX_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onReminderRuntimeState: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: ReminderNotification | null): void => {
+      callback(state);
+    };
+
+    ipcRenderer.on(REMINDER_RUNTIME_STATE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(REMINDER_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onRemindersUpdated: (callback) => {
+    const listener = (_event: IpcRendererEvent, reminders: ReminderRecord[]): void => {
+      callback(reminders);
+    };
+
+    ipcRenderer.on(REMINDERS_UPDATED_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(REMINDERS_UPDATED_CHANNEL, listener);
+    };
+  },
+  onTaskNotification: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: TaskNotification | null): void => {
+      callback(state);
+    };
+
+    ipcRenderer.on(TASK_NOTIFICATION_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(TASK_NOTIFICATION_CHANNEL, listener);
+    };
+  },
+  onTasksUpdated: (callback) => {
+    const listener = (_event: IpcRendererEvent, tasks: TaskCenterSnapshot): void => {
+      callback(tasks);
+    };
+
+    ipcRenderer.on(TASKS_UPDATED_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(TASKS_UPDATED_CHANNEL, listener);
+    };
+  }
 };
 
 contextBridge.exposeInMainWorld('companionAPI', companionAPI);

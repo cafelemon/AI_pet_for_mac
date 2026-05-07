@@ -12449,19 +12449,617 @@ function requireClient() {
   return client.exports;
 }
 var clientExports = requireClient();
-function Companion({ keyframe, canvas, draggable }) {
+function Bubble({ state, message, actions }) {
+  if (!message) {
+    return null;
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `status-bubble status-bubble--${state}`, "data-hit-interactive": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { children: message }),
+    actions ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-bubble__actions", children: actions }) : null
+  ] });
+}
+const ALPHA_HIT_THRESHOLD = 16;
+const ALPHA_REGION_BAND_HEIGHT = 3;
+function regionFromImageBounds(image) {
+  const rect = image.getBoundingClientRect();
+  return {
+    x: Math.round(rect.left),
+    y: Math.round(rect.top),
+    width: Math.round(rect.width),
+    height: Math.round(rect.height)
+  };
+}
+function buildAlphaHitRegions(image, context, sourceWidth, sourceHeight) {
+  const rect = image.getBoundingClientRect();
+  const cssWidth = Math.max(1, Math.round(rect.width));
+  const cssHeight = Math.max(1, Math.round(rect.height));
+  const imageData = context.getImageData(0, 0, sourceWidth, sourceHeight).data;
+  const sourceXToCssX = new Uint16Array(sourceWidth);
+  const regions = [];
+  for (let sourceX = 0; sourceX < sourceWidth; sourceX += 1) {
+    sourceXToCssX[sourceX] = Math.min(cssWidth - 1, Math.floor(sourceX / sourceWidth * cssWidth));
+  }
+  for (let bandTop = 0; bandTop < cssHeight; bandTop += ALPHA_REGION_BAND_HEIGHT) {
+    const bandHeight = Math.min(ALPHA_REGION_BAND_HEIGHT, cssHeight - bandTop);
+    const sourceYStart = Math.floor(bandTop / cssHeight * sourceHeight);
+    const sourceYEnd = Math.min(sourceHeight, Math.ceil((bandTop + bandHeight) / cssHeight * sourceHeight));
+    const opaqueColumns = new Uint8Array(cssWidth);
+    for (let sourceY = sourceYStart; sourceY < sourceYEnd; sourceY += 1) {
+      const rowOffset = sourceY * sourceWidth * 4;
+      for (let sourceX = 0; sourceX < sourceWidth; sourceX += 1) {
+        if (imageData[rowOffset + sourceX * 4 + 3] > ALPHA_HIT_THRESHOLD) {
+          opaqueColumns[sourceXToCssX[sourceX]] = 1;
+        }
+      }
+    }
+    let runStart = -1;
+    for (let cssX = 0; cssX <= cssWidth; cssX += 1) {
+      if (cssX < cssWidth && opaqueColumns[cssX] === 1) {
+        if (runStart === -1) {
+          runStart = cssX;
+        }
+        continue;
+      }
+      if (runStart !== -1) {
+        const regionLeft = Math.max(0, Math.round(rect.left + runStart - 1));
+        const regionRight = Math.min(Math.ceil(rect.right), Math.round(rect.left + cssX + 1));
+        regions.push({
+          x: regionLeft,
+          y: Math.max(0, Math.round(rect.top + bandTop)),
+          width: Math.max(1, regionRight - regionLeft),
+          height: bandHeight
+        });
+        runStart = -1;
+      }
+    }
+  }
+  return regions;
+}
+function Companion({
+  keyframe,
+  canvas,
+  state,
+  onHitTesterChange,
+  onHitRegionsChange
+}) {
+  const imageRef = reactExports.useRef(null);
   const imageUrl = window.companionAPI.assetUrl(keyframe.relativePath);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: draggable ? "companion-shell companion-shell--draggable" : "companion-shell", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+  const [displayUrl, setDisplayUrl] = reactExports.useState(imageUrl);
+  const buildHitTester = reactExports.useCallback(() => {
+    const image = imageRef.current;
+    if (!image || !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+      onHitTesterChange(null);
+      return;
+    }
+    const maskCanvas = document.createElement("canvas");
+    maskCanvas.width = image.naturalWidth;
+    maskCanvas.height = image.naturalHeight;
+    const context = maskCanvas.getContext("2d", { willReadFrequently: true });
+    if (!context) {
+      onHitTesterChange(null);
+      return;
+    }
+    try {
+      context.drawImage(image, 0, 0, maskCanvas.width, maskCanvas.height);
+      onHitRegionsChange(buildAlphaHitRegions(image, context, maskCanvas.width, maskCanvas.height));
+      onHitTesterChange((x, y) => {
+        const rect = image.getBoundingClientRect();
+        if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
+          return false;
+        }
+        const imageX = Math.floor((x - rect.left) / rect.width * maskCanvas.width);
+        const imageY = Math.floor((y - rect.top) / rect.height * maskCanvas.height);
+        const clampedX = Math.min(Math.max(imageX, 0), maskCanvas.width - 1);
+        const clampedY = Math.min(Math.max(imageY, 0), maskCanvas.height - 1);
+        return context.getImageData(clampedX, clampedY, 1, 1).data[3] > ALPHA_HIT_THRESHOLD;
+      });
+    } catch (error) {
+      console.warn("Falling back to keyframe bounds hit testing.", error);
+      onHitRegionsChange([regionFromImageBounds(image)]);
+      onHitTesterChange((x, y) => {
+        const rect = image.getBoundingClientRect();
+        return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+      });
+    }
+  }, [onHitRegionsChange, onHitTesterChange]);
+  reactExports.useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+    setDisplayUrl(imageUrl);
+    fetch(imageUrl).then((response) => response.blob()).then((blob) => {
+      if (cancelled) {
+        return;
+      }
+      objectUrl = URL.createObjectURL(blob);
+      setDisplayUrl(objectUrl);
+    }).catch((error) => {
+      console.warn("Falling back to direct keyframe URL.", error);
+      if (!cancelled) {
+        setDisplayUrl(imageUrl);
+      }
+    });
+    return () => {
+      cancelled = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [imageUrl]);
+  reactExports.useEffect(() => {
+    onHitTesterChange(null);
+    onHitRegionsChange([]);
+    if (imageRef.current?.complete) {
+      buildHitTester();
+    }
+    return () => {
+      onHitTesterChange(null);
+      onHitRegionsChange([]);
+    };
+  }, [buildHitTester, keyframe.relativePath, onHitRegionsChange, onHitTesterChange]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "img",
     {
-      className: "companion-image",
-      src: imageUrl,
+      ref: imageRef,
+      className: `companion-image companion-image--${state}`,
+      src: displayUrl,
       width: canvas.width,
       height: canvas.height,
       alt: "",
-      draggable: false
+      draggable: false,
+      onLoad: buildHitTester
     }
-  ) });
+  );
+}
+const PRIORITY_LABELS = {
+  high: "高",
+  normal: "中",
+  low: "低"
+};
+const REPEAT_LABELS = {
+  none: "不重复",
+  daily: "每天",
+  weekly: "每周",
+  monthly: "每月"
+};
+const STATUS_LABELS$1 = {
+  scheduled: "待提醒",
+  triggered: "已提醒",
+  dismissed: "已清除"
+};
+function pad(value) {
+  return value.toString().padStart(2, "0");
+}
+function localDateTimeValue(date) {
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(
+    date.getMinutes()
+  )}`;
+}
+function defaultDueValue() {
+  return localDateTimeValue(new Date(Date.now() + 15 * 6e4));
+}
+function formatDueAt(dueAt) {
+  const parsed = new Date(dueAt);
+  if (Number.isNaN(parsed.getTime())) {
+    return dueAt;
+  }
+  return new Intl.DateTimeFormat(void 0, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(parsed);
+}
+function dueAtFromLocalValue(value) {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("时间无效");
+  }
+  return parsed.toISOString();
+}
+function ReminderPanel({
+  open,
+  reminders,
+  activeReminder,
+  defaultSnoozeMinutes,
+  onCreateReminder,
+  onDismissReminder,
+  onDismissNotification,
+  onSnoozeReminder,
+  onClose
+}) {
+  const [title, setTitle] = reactExports.useState("");
+  const [dueAt, setDueAt] = reactExports.useState(defaultDueValue);
+  const [priority, setPriority] = reactExports.useState("normal");
+  const [repeatRule, setRepeatRule] = reactExports.useState("none");
+  const [error, setError] = reactExports.useState(null);
+  const [submitting, setSubmitting] = reactExports.useState(false);
+  const sortedReminders = reactExports.useMemo(
+    () => [...reminders].sort((left, right) => {
+      if (left.status !== right.status) {
+        return left.status === "triggered" ? -1 : 1;
+      }
+      return Date.parse(left.dueAt) - Date.parse(right.dueAt);
+    }),
+    [reminders]
+  );
+  if (!open) {
+    return null;
+  }
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      setError("请输入事项");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onCreateReminder({
+        title: nextTitle,
+        dueAt: dueAtFromLocalValue(dueAt),
+        priority,
+        repeatRule
+      });
+      setTitle("");
+      setDueAt(defaultDueValue());
+      setPriority("normal");
+      setRepeatRule("none");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "新增失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "reminder-panel", "aria-label": "PA4 提醒面板", "data-hit-interactive": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "reminder-panel__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "PA4" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: "提醒" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-button", type: "button", "aria-label": "关闭提醒面板", onClick: onClose, children: "x" })
+    ] }),
+    activeReminder ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "reminder-alert", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "reminder-alert__title", children: activeReminder.reminder.title }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "reminder-alert__meta", children: formatDueAt(activeReminder.reminder.dueAt) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "reminder-alert__actions", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            className: "panel-button",
+            type: "button",
+            onClick: () => onSnoozeReminder(activeReminder.reminder.id, defaultSnoozeMinutes),
+            children: [
+              defaultSnoozeMinutes,
+              " 分钟"
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: "panel-button panel-button--active",
+            type: "button",
+            onClick: () => onDismissNotification(activeReminder.reminder.id),
+            children: "知道了"
+          }
+        )
+      ] })
+    ] }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "reminder-form", onSubmit: handleSubmit, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          className: "reminder-input",
+          type: "text",
+          value: title,
+          maxLength: 80,
+          placeholder: "事项",
+          "aria-label": "提醒事项",
+          onChange: (event) => setTitle(event.currentTarget.value)
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          className: "reminder-input",
+          type: "datetime-local",
+          value: dueAt,
+          "aria-label": "提醒时间",
+          onChange: (event) => setDueAt(event.currentTarget.value)
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "reminder-form__row", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "select",
+          {
+            className: "reminder-select",
+            value: priority,
+            "aria-label": "提醒优先级",
+            onChange: (event) => setPriority(event.currentTarget.value),
+            children: Object.entries(PRIORITY_LABELS).map(([value, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value, children: label }, value))
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "select",
+          {
+            className: "reminder-select",
+            value: repeatRule,
+            "aria-label": "重复规则",
+            onChange: (event) => setRepeatRule(event.currentTarget.value),
+            children: Object.entries(REPEAT_LABELS).map(([value, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value, children: label }, value))
+          }
+        )
+      ] }),
+      error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "reminder-form__error", children: error }) : null,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "panel-button panel-button--active reminder-form__submit", type: "submit", disabled: submitting, children: "新增" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "reminder-list", "aria-label": "提醒列表", children: sortedReminders.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "reminder-list__empty", children: "暂无提醒" }) : sortedReminders.map((reminder) => /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: "reminder-item", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "reminder-item__main", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "reminder-item__title", children: reminder.title }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "reminder-item__meta", children: [
+          formatDueAt(reminder.dueAt),
+          " · ",
+          REPEAT_LABELS[reminder.repeatRule],
+          " · ",
+          STATUS_LABELS$1[reminder.status]
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `reminder-priority reminder-priority--${reminder.priority}`, children: PRIORITY_LABELS[reminder.priority] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "icon-button reminder-item__clear",
+          type: "button",
+          "aria-label": "清除提醒",
+          onClick: () => onDismissReminder(reminder.id),
+          children: "x"
+        }
+      )
+    ] }, reminder.id)) })
+  ] });
+}
+function variantLabel(keyframe) {
+  return keyframe.label.replace(/^idle_/, "").replace(/_/g, " ");
+}
+function StatusPanel({
+  open,
+  states,
+  idleVariants,
+  activeState,
+  activeVariant,
+  stateLabels,
+  controls,
+  scaleConfig,
+  onSelectState,
+  onSelectIdleVariant,
+  onScaleDown,
+  onScaleUp,
+  onScaleReset,
+  onTogglePassthrough,
+  onClose,
+  showMouseModeToggle = true
+}) {
+  if (!open) {
+    return null;
+  }
+  const activeVariantKeyframe = activeVariant ? idleVariants.find((variant) => variant.folder === activeVariant) : void 0;
+  const activeLabel = activeVariantKeyframe ? variantLabel(activeVariantKeyframe) : stateLabels[activeState];
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "status-panel", "aria-label": "PA3 状态测试面板", "data-hit-interactive": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "status-panel__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "PA3" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: activeLabel })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-button", type: "button", "aria-label": "关闭面板", onClick: onClose, children: "x" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "状态" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-panel__grid", children: states.map((state) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: state === activeState && !activeVariant ? "panel-button panel-button--active" : "panel-button",
+          type: "button",
+          "aria-pressed": state === activeState && !activeVariant,
+          onClick: () => onSelectState(state),
+          children: stateLabels[state]
+        },
+        state
+      )) })
+    ] }),
+    idleVariants.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "Idle Variant" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-panel__grid", children: idleVariants.map((variant) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: variant.folder === activeVariant ? "panel-button panel-button--active" : "panel-button",
+          type: "button",
+          "aria-pressed": variant.folder === activeVariant,
+          onClick: () => onSelectIdleVariant(variant.folder),
+          children: variantLabel(variant)
+        },
+        variant.folder
+      )) })
+    ] }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "窗口" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scale-control", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: "icon-button",
+            type: "button",
+            "aria-label": "缩小窗口",
+            disabled: controls.scale <= scaleConfig.minScale,
+            onClick: onScaleDown,
+            children: "-"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "scale-readout", type: "button", onClick: onScaleReset, children: [
+          controls.scale.toFixed(2),
+          "x"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: "icon-button",
+            type: "button",
+            "aria-label": "放大窗口",
+            disabled: controls.scale >= scaleConfig.maxScale,
+            onClick: onScaleUp,
+            children: "+"
+          }
+        )
+      ] }),
+      showMouseModeToggle ? /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "passthrough-toggle", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: controls.mouseMode === "smart", onChange: onTogglePassthrough }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: controls.mouseMode === "smart" ? "智能穿透" : "整窗交互" })
+      ] }) : null
+    ] })
+  ] });
+}
+const STATUS_LABELS = {
+  todo: "待办",
+  active: "进行中",
+  blocked: "卡住",
+  done: "完成",
+  failed: "失败"
+};
+const SOURCE_LABELS = {
+  manual: "手动",
+  codex: "Codex"
+};
+function formatTime(value) {
+  if (!value) {
+    return "暂无";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat(void 0, {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(parsed);
+}
+function taskMeta(task) {
+  return `${SOURCE_LABELS[task.source]} · ${STATUS_LABELS[task.status]} · ${formatTime(
+    task.completedAt ?? task.lastActivityAt ?? task.updatedAt
+  )}`;
+}
+function TaskPanel({
+  open,
+  snapshot,
+  notification,
+  onCreateTask,
+  onUpdateTaskStatus,
+  onDeleteTask,
+  onDismissNotification,
+  onClose
+}) {
+  const [title, setTitle] = reactExports.useState("");
+  const [error, setError] = reactExports.useState(null);
+  const [submitting, setSubmitting] = reactExports.useState(false);
+  const manualTasks = reactExports.useMemo(() => snapshot.today.filter((task) => task.source === "manual"), [snapshot.today]);
+  if (!open) {
+    return null;
+  }
+  async function handleSubmit(event) {
+    event.preventDefault();
+    const nextTitle = title.trim();
+    if (!nextTitle) {
+      setError("请输入任务");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onCreateTask({ title: nextTitle });
+      setTitle("");
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "新增失败");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "task-panel", "aria-label": "PA6 任务中心", "data-hit-interactive": "true", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "task-panel__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "PA6" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: "任务中心" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-button", type: "button", "aria-label": "关闭任务中心", onClick: onClose, children: "x" })
+    ] }),
+    notification ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "task-alert", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-alert__title", children: notification.task.title }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "task-alert__meta", children: [
+        "可能卡住 · ",
+        formatTime(notification.task.lastActivityAt)
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "panel-button panel-button--active",
+          type: "button",
+          onClick: () => onDismissNotification(notification.task.id),
+          children: "知道了"
+        }
+      )
+    ] }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "task-panel__section", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "Codex 当前任务" }),
+      snapshot.currentCodex ? /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: `task-item task-item--${snapshot.currentCodex.status}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "task-item__main", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__title", children: snapshot.currentCodex.title }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__meta", children: taskMeta(snapshot.currentCodex) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `task-status task-status--${snapshot.currentCodex.status}`, children: STATUS_LABELS[snapshot.currentCodex.status] })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-list__empty", children: "暂无 Codex 任务" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "task-panel__section", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "今日任务" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "task-form", onSubmit: handleSubmit, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            className: "task-input",
+            type: "text",
+            value: title,
+            maxLength: 120,
+            placeholder: "新增今日任务",
+            "aria-label": "新增今日任务",
+            onChange: (event) => setTitle(event.currentTarget.value)
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "panel-button panel-button--active task-form__submit", type: "submit", disabled: submitting, children: "新增" })
+      ] }),
+      error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-form__error", children: error }) : null,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "task-list", children: manualTasks.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-list__empty", children: "暂无今日任务" }) : manualTasks.map((task) => /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: `task-item task-item--${task.status}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "task-item__main", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__title", children: task.title }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__meta", children: taskMeta(task) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "task-item__actions", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button", type: "button", onClick: () => onUpdateTaskStatus(task.id, "active"), children: "做" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button", type: "button", onClick: () => onUpdateTaskStatus(task.id, "blocked"), children: "卡" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button mini-button--primary", type: "button", onClick: () => onUpdateTaskStatus(task.id, "done"), children: "完" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button", type: "button", onClick: () => onDeleteTask(task.id), children: "x" })
+        ] })
+      ] }, task.id)) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "task-panel__section", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "最近完成" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "task-list task-list--compact", children: snapshot.recentCompleted.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-list__empty", children: "暂无完成记录" }) : snapshot.recentCompleted.map((task) => /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: `task-item task-item--${task.status}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "task-item__main", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__title", children: task.title }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "task-item__meta", children: taskMeta(task) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `task-status task-status--${task.status}`, children: STATUS_LABELS[task.status] })
+      ] }, task.id)) })
+    ] })
+  ] });
 }
 function keyframeFileName(folder) {
   return `${folder}_01.png`;
@@ -12475,76 +13073,503 @@ function buildKeyframes(companionConfig, statesConfig) {
     relativePath: `${assetRoot}/keyframes/${folder}/${keyframeFileName(folder)}`
   }));
 }
-function findDefaultIndex(keyframes, defaultState) {
-  const index = keyframes.findIndex((keyframe) => keyframe.state === defaultState);
-  return index >= 0 ? index : 0;
+const RENDER_STATES = [
+  "idle",
+  "coding",
+  "thinking",
+  "waiting_auth",
+  "success",
+  "error",
+  "reminder",
+  "sleep"
+];
+const STATE_LABELS = {
+  idle: "Idle",
+  coding: "Coding",
+  thinking: "Thinking",
+  waiting_auth: "Waiting Auth",
+  success: "Success",
+  error: "Error",
+  reminder: "Reminder",
+  sleep: "Sleep"
+};
+const BUBBLE_MESSAGES = {
+  idle: null,
+  coding: "正在工作",
+  thinking: "我在思考",
+  waiting_auth: "需要你确认一下",
+  success: "完成啦",
+  error: "出错了",
+  reminder: "该提醒了",
+  sleep: "休息中"
+};
+const STATE_KEYFRAME_FOLDERS = {
+  waiting_auth: "reminder"
+};
+const DEFAULT_WINDOW_CONTROLS = {
+  scale: 1,
+  mouseMode: "smart",
+  mousePassthrough: true
+};
+const DEFAULT_SNOOZE_MINUTES = 10;
+const EMPTY_TASK_SNAPSHOT = {
+  today: [],
+  currentCodex: null,
+  recentCompleted: []
+};
+const MODULE_LABELS = {
+  status: "状态",
+  tasks: "任务",
+  reminders: "提醒",
+  settings: "设置"
+};
+function isCompanionState(state) {
+  return RENDER_STATES.includes(state);
 }
-function App() {
-  const [companionConfig, setCompanionConfig] = reactExports.useState(null);
-  const [statesConfig, setStatesConfig] = reactExports.useState(null);
-  const [activeIndex, setActiveIndex] = reactExports.useState(0);
-  reactExports.useEffect(() => {
-    let cancelled = false;
-    async function loadConfig() {
-      const [nextCompanionConfig, nextStatesConfig] = await Promise.all([
-        window.companionAPI.getCompanionConfig(),
-        window.companionAPI.getStatesConfig()
-      ]);
-      if (!cancelled) {
-        setCompanionConfig(nextCompanionConfig);
-        setStatesConfig(nextStatesConfig);
-      }
+function keyframeFolderForState(state) {
+  return STATE_KEYFRAME_FOLDERS[state] ?? state;
+}
+function buildCompanionCatalog(keyframes, statesConfig) {
+  const byFolder = new Map(keyframes.map((keyframe) => [keyframe.folder, keyframe]));
+  const states = RENDER_STATES.filter(
+    (state) => statesConfig.states.includes(state) && byFolder.has(keyframeFolderForState(state))
+  );
+  const byState = /* @__PURE__ */ new Map();
+  for (const state of states) {
+    const keyframe = byFolder.get(keyframeFolderForState(state));
+    if (keyframe) {
+      byState.set(state, keyframe);
     }
-    loadConfig().catch((error) => {
-      console.error("Failed to load companion config", error);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  }
+  return {
+    states,
+    idleVariants: statesConfig.idleVariants.map((variant) => byFolder.get(variant)).filter((variant) => Boolean(variant)),
+    byFolder,
+    byState
+  };
+}
+function defaultCatalogSelection(defaultState, catalog) {
+  if (isCompanionState(defaultState) && catalog.byState.has(defaultState)) {
+    return { state: defaultState, variant: null };
+  }
+  return { state: catalog.byState.has("idle") ? "idle" : catalog.states[0] ?? "idle", variant: null };
+}
+function clampRendererScale(scale, companionConfig) {
+  const { minScale, maxScale } = companionConfig.renderer;
+  return Number(Math.min(Math.max(scale, minScale), maxScale).toFixed(2));
+}
+function codexBubbleMessage(codexState, state) {
+  if (codexState && codexState.state !== "idle") {
+    return codexState.message ?? codexState.task ?? BUBBLE_MESSAGES[state];
+  }
+  return BUBBLE_MESSAGES[state];
+}
+function statePriority(state, statesConfig) {
+  return statesConfig.priorities[state] ?? 999;
+}
+function moduleFromSearch() {
+  const module = new URLSearchParams(window.location.search).get("module");
+  return module === "tasks" || module === "reminders" || module === "settings" || module === "status" ? module : "status";
+}
+function useCompanionCatalog(companionConfig, statesConfig) {
   const keyframes = reactExports.useMemo(() => {
     if (!companionConfig || !statesConfig) {
       return [];
     }
     return buildKeyframes(companionConfig, statesConfig);
   }, [companionConfig, statesConfig]);
-  reactExports.useEffect(() => {
-    if (!companionConfig || keyframes.length === 0) {
-      return;
+  const catalog = reactExports.useMemo(() => {
+    if (!statesConfig) {
+      return null;
     }
-    setActiveIndex(findDefaultIndex(keyframes, companionConfig.renderer.defaultState));
-  }, [companionConfig, keyframes]);
+    return buildCompanionCatalog(keyframes, statesConfig);
+  }, [keyframes, statesConfig]);
+  return { keyframes, catalog };
+}
+function useRuntimeState() {
+  const [codexState, setCodexState] = reactExports.useState(null);
+  const [reminderState, setReminderState] = reactExports.useState(null);
+  const [reminders, setReminders] = reactExports.useState([]);
+  const [taskNotification, setTaskNotification] = reactExports.useState(null);
+  const [tasks, setTasks] = reactExports.useState(EMPTY_TASK_SNAPSHOT);
+  const refreshReminders = reactExports.useCallback(async () => {
+    setReminders(await window.companionAPI.listReminders());
+  }, []);
+  const refreshTasks = reactExports.useCallback(async () => {
+    setTasks(await window.companionAPI.listTasks());
+  }, []);
   reactExports.useEffect(() => {
-    if (!companionConfig || keyframes.length === 0) {
-      return void 0;
-    }
-    const defaultState = companionConfig.renderer.defaultState;
-    function onKeyDown(event) {
-      if (event.key === "ArrowRight") {
-        setActiveIndex((index) => (index + 1) % keyframes.length);
-      } else if (event.key === "ArrowLeft") {
-        setActiveIndex((index) => (index - 1 + keyframes.length) % keyframes.length);
-      } else if (event.key === "Escape") {
-        setActiveIndex(findDefaultIndex(keyframes, defaultState));
+    let cancelled = false;
+    async function load() {
+      const [nextCodex, nextReminderState, nextReminders, nextTaskNotification, nextTasks] = await Promise.all([
+        window.companionAPI.getCodexRuntimeState(),
+        window.companionAPI.getReminderRuntimeState(),
+        window.companionAPI.listReminders(),
+        window.companionAPI.getTaskNotification(),
+        window.companionAPI.listTasks()
+      ]);
+      if (!cancelled) {
+        setCodexState(nextCodex);
+        setReminderState(nextReminderState);
+        setReminders(nextReminders);
+        setTaskNotification(nextTaskNotification);
+        setTasks(nextTasks);
       }
     }
-    window.addEventListener("keydown", onKeyDown);
+    load().catch((error) => console.error("Failed to load runtime state", error));
     return () => {
-      window.removeEventListener("keydown", onKeyDown);
+      cancelled = true;
     };
-  }, [companionConfig, keyframes]);
-  if (!companionConfig || keyframes.length === 0) {
+  }, []);
+  reactExports.useEffect(() => window.companionAPI.onCodexRuntimeState(setCodexState), []);
+  reactExports.useEffect(() => window.companionAPI.onReminderRuntimeState(setReminderState), []);
+  reactExports.useEffect(() => window.companionAPI.onRemindersUpdated(setReminders), []);
+  reactExports.useEffect(() => window.companionAPI.onTaskNotification(setTaskNotification), []);
+  reactExports.useEffect(() => window.companionAPI.onTasksUpdated(setTasks), []);
+  return { codexState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
+}
+function PetApp() {
+  const [companionConfig, setCompanionConfig] = reactExports.useState(null);
+  const [statesConfig, setStatesConfig] = reactExports.useState(null);
+  const [manualSelection, setManualSelection] = reactExports.useState(null);
+  const { codexState, reminderState, taskNotification } = useRuntimeState();
+  const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig);
+  reactExports.useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const [nextCompanionConfig, nextStatesConfig, nextSelection] = await Promise.all([
+        window.companionAPI.getCompanionConfig(),
+        window.companionAPI.getStatesConfig(),
+        window.companionAPI.getManualRenderSelection()
+      ]);
+      if (!cancelled) {
+        setCompanionConfig(nextCompanionConfig);
+        setStatesConfig(nextStatesConfig);
+        setManualSelection(nextSelection);
+      }
+    }
+    load().catch((error) => console.error("Failed to load pet config", error));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  reactExports.useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
+  const publishHitRegions = reactExports.useCallback((regions) => {
+    window.companionAPI.setMouseHitRegions(regions).catch((error) => {
+      console.error("Failed to update pet hit regions", error);
+    });
+  }, []);
+  if (!companionConfig || !statesConfig || !catalog || catalog.states.length === 0) {
     return null;
   }
-  const activeKeyframe = keyframes[activeIndex] ?? keyframes[0];
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    Companion,
-    {
-      keyframe: activeKeyframe,
-      canvas: companionConfig.renderer.keyframeCanvas,
-      draggable: companionConfig.window.draggable
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const codexOverride = codexState && codexState.state !== "idle" ? codexState : null;
+  const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
+  const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
+  const runtimeCandidates = [];
+  if (codexOverride) {
+    runtimeCandidates.push({ source: "codex", state: codexOverride.state });
+  }
+  if (reminderOverride) {
+    runtimeCandidates.push({ source: "reminder", state: reminderOverride.state });
+  }
+  if (taskOverride) {
+    runtimeCandidates.push({ source: "task", state: taskOverride.state });
+  }
+  const runtimeOverride = runtimeCandidates.sort(
+    (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
+  )[0] ?? null;
+  const renderedState = runtimeOverride?.state ?? selection.state;
+  const renderedVariant = runtimeOverride ? null : selection.variant;
+  const activeKeyframe = (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
+  if (!activeKeyframe) {
+    return null;
+  }
+  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : codexBubbleMessage(runtimeOverride?.source === "codex" ? codexOverride : null, renderedState);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "companion-shell", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "companion-stage", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Companion,
+      {
+        keyframe: activeKeyframe,
+        canvas: companionConfig.renderer.keyframeCanvas,
+        state: renderedState,
+        onHitTesterChange: () => void 0,
+        onHitRegionsChange: publishHitRegions
+      },
+      `${renderedState}:${activeKeyframe.folder}`
+    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { state: renderedState, message: bubbleMessage, actions: null })
+  ] });
+}
+function SettingsModule({
+  shortcuts,
+  permissionStatus,
+  onUpdateShortcut,
+  onResetShortcut
+}) {
+  const [drafts, setDrafts] = reactExports.useState({});
+  const [error, setError] = reactExports.useState(null);
+  async function submitShortcut(event, shortcut) {
+    event.preventDefault();
+    setError(null);
+    try {
+      await onUpdateShortcut(shortcut.id, drafts[shortcut.id] ?? shortcut.accelerator);
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "快捷键更新失败");
     }
+  }
+  async function resetShortcut(shortcut) {
+    setError(null);
+    try {
+      await onResetShortcut(shortcut.id);
+      setDrafts((current) => ({ ...current, [shortcut.id]: shortcut.defaultAccelerator }));
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "快捷键重置失败");
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "settings-module", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "control-module__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "PA7" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: "设置" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `permission-card permission-card--${permissionStatus}`, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "macOS 鼠标监听" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: permissionStatus === "granted" ? "已授权，⌥+左键拖动、⌥+右键打开控制中心可用。" : permissionStatus === "denied" ? "需要在系统设置中授权辅助功能后，⌥+鼠标交互才可用。" : "正在检测权限。" }),
+      permissionStatus !== "granted" ? /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "panel-button panel-button--active", type: "button", onClick: () => window.companionAPI.openInputPermissionSettings(), children: "打开系统设置" }) : null
+    ] }),
+    error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: error }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "shortcut-list", children: shortcuts.map((shortcut) => /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "shortcut-item", onSubmit: (event) => submitShortcut(event, shortcut), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: shortcut.label }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__meta", children: [
+          shortcut.enabled ? "已启用" : "未启用",
+          " · 默认 ",
+          shortcut.defaultAccelerator
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          className: "shortcut-input",
+          value: drafts[shortcut.id] ?? shortcut.accelerator,
+          "aria-label": shortcut.label,
+          disabled: !shortcut.editable,
+          onChange: (event) => setDrafts((current) => ({ ...current, [shortcut.id]: event.currentTarget.value }))
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "shortcut-item__actions", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button mini-button--primary", type: "submit", children: "存" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button", type: "button", onClick: () => resetShortcut(shortcut), children: "还" })
+      ] })
+    ] }, shortcut.id)) })
+  ] });
+}
+function ControlCenterApp() {
+  const [companionConfig, setCompanionConfig] = reactExports.useState(null);
+  const [statesConfig, setStatesConfig] = reactExports.useState(null);
+  const [windowControls, setWindowControls] = reactExports.useState(DEFAULT_WINDOW_CONTROLS);
+  const [manualSelection, setManualSelection] = reactExports.useState(null);
+  const [activeModule, setActiveModule] = reactExports.useState(moduleFromSearch);
+  const [shortcuts, setShortcuts] = reactExports.useState([]);
+  const [permissionStatus, setPermissionStatus] = reactExports.useState("unknown");
+  const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
+  const { catalog } = useCompanionCatalog(companionConfig, statesConfig);
+  reactExports.useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const [
+        nextCompanionConfig,
+        nextStatesConfig,
+        nextWindowControls,
+        nextSelection,
+        nextShortcuts,
+        nextPermissionStatus
+      ] = await Promise.all([
+        window.companionAPI.getCompanionConfig(),
+        window.companionAPI.getStatesConfig(),
+        window.companionAPI.getWindowControls(),
+        window.companionAPI.getManualRenderSelection(),
+        window.companionAPI.getShortcuts(),
+        window.companionAPI.getInputPermissionStatus()
+      ]);
+      if (!cancelled) {
+        setCompanionConfig(nextCompanionConfig);
+        setStatesConfig(nextStatesConfig);
+        setWindowControls(nextWindowControls);
+        setManualSelection(nextSelection);
+        setShortcuts(nextShortcuts);
+        setPermissionStatus(nextPermissionStatus);
+      }
+    }
+    load().catch((error) => console.error("Failed to load control center", error));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  reactExports.useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
+  reactExports.useEffect(() => window.companionAPI.onControlCenterModule(setActiveModule), []);
+  reactExports.useEffect(() => window.companionAPI.onShortcutsUpdated(setShortcuts), []);
+  reactExports.useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
+  const setWindowScale = reactExports.useCallback(
+    (scale) => {
+      if (!companionConfig) {
+        return;
+      }
+      window.companionAPI.setWindowScale(clampRendererScale(scale, companionConfig)).then((nextScale) => setWindowControls((controls) => ({ ...controls, scale: nextScale }))).catch((error) => console.error("Failed to update window scale", error));
+    },
+    [companionConfig]
   );
+  const updateManualSelection = reactExports.useCallback((selection2) => {
+    window.companionAPI.setManualRenderSelection(selection2).then(setManualSelection).catch((error) => console.error("Failed to update render selection", error));
+  }, []);
+  const createReminder = reactExports.useCallback(
+    async (input) => {
+      await window.companionAPI.createReminder(input);
+      await refreshReminders();
+    },
+    [refreshReminders]
+  );
+  const dismissReminder = reactExports.useCallback(
+    async (id) => {
+      await window.companionAPI.dismissReminder(id);
+      await refreshReminders();
+    },
+    [refreshReminders]
+  );
+  const dismissReminderNotification = reactExports.useCallback(
+    async (id) => {
+      await window.companionAPI.dismissReminderNotification(id);
+      await refreshReminders();
+    },
+    [refreshReminders]
+  );
+  const snoozeReminder = reactExports.useCallback(
+    async (id, minutes) => {
+      await window.companionAPI.snoozeReminder(id, minutes);
+      await refreshReminders();
+    },
+    [refreshReminders]
+  );
+  const createTask = reactExports.useCallback(
+    async (input) => {
+      await window.companionAPI.createTask(input);
+      await refreshTasks();
+    },
+    [refreshTasks]
+  );
+  const updateTaskStatus = reactExports.useCallback(
+    async (id, status) => {
+      await window.companionAPI.updateTaskStatus(id, status);
+      await refreshTasks();
+    },
+    [refreshTasks]
+  );
+  const deleteTask = reactExports.useCallback(
+    async (id) => {
+      await window.companionAPI.deleteTask(id);
+      await refreshTasks();
+    },
+    [refreshTasks]
+  );
+  const dismissTaskNotification = reactExports.useCallback(
+    async (id) => {
+      await window.companionAPI.dismissTaskNotification(id);
+      await refreshTasks();
+    },
+    [refreshTasks]
+  );
+  async function updateShortcut(id, accelerator) {
+    setShortcuts(await window.companionAPI.updateShortcut(id, accelerator));
+  }
+  async function resetShortcut(id) {
+    setShortcuts(await window.companionAPI.resetShortcut(id));
+  }
+  if (!companionConfig || !statesConfig || !catalog || catalog.states.length === 0) {
+    return null;
+  }
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const activeReminder = reminderState && !reminderState.isStale ? reminderState : null;
+  const activeTaskNotification = taskNotification && !taskNotification.isStale ? taskNotification : null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "control-center-shell", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "control-center-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "Desktop Companion" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "control-center-title", children: "控制中心" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-button", type: "button", "aria-label": "关闭控制中心", onClick: () => window.companionAPI.closeControlCenter(), children: "x" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { className: "control-center-nav", "aria-label": "控制中心模块", children: Object.keys(MODULE_LABELS).map((module) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        className: module === activeModule ? "control-nav-button control-nav-button--active" : "control-nav-button",
+        type: "button",
+        onClick: () => setActiveModule(module),
+        children: MODULE_LABELS[module]
+      },
+      module
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "control-center-content", children: [
+      activeModule === "status" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        StatusPanel,
+        {
+          open: true,
+          states: catalog.states,
+          idleVariants: catalog.idleVariants,
+          activeState: selection.state,
+          activeVariant: selection.variant,
+          stateLabels: STATE_LABELS,
+          controls: windowControls,
+          scaleConfig: companionConfig.renderer,
+          onSelectState: (state) => updateManualSelection({ state, variant: null }),
+          onSelectIdleVariant: (variant) => updateManualSelection({ state: "idle", variant }),
+          onScaleDown: () => setWindowScale(windowControls.scale - companionConfig.renderer.scaleStep),
+          onScaleUp: () => setWindowScale(windowControls.scale + companionConfig.renderer.scaleStep),
+          onScaleReset: () => setWindowScale(companionConfig.renderer.defaultScale),
+          onClose: () => window.companionAPI.closeControlCenter(),
+          showMouseModeToggle: false
+        }
+      ) : null,
+      activeModule === "reminders" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ReminderPanel,
+        {
+          open: true,
+          reminders,
+          activeReminder,
+          defaultSnoozeMinutes: DEFAULT_SNOOZE_MINUTES,
+          onCreateReminder: createReminder,
+          onDismissReminder: dismissReminder,
+          onDismissNotification: dismissReminderNotification,
+          onSnoozeReminder: snoozeReminder,
+          onClose: () => window.companionAPI.closeControlCenter()
+        }
+      ) : null,
+      activeModule === "tasks" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        TaskPanel,
+        {
+          open: true,
+          snapshot: tasks,
+          notification: activeTaskNotification,
+          onCreateTask: createTask,
+          onUpdateTaskStatus: updateTaskStatus,
+          onDeleteTask: deleteTask,
+          onDismissNotification: dismissTaskNotification,
+          onClose: () => window.companionAPI.closeControlCenter()
+        }
+      ) : null,
+      activeModule === "settings" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        SettingsModule,
+        {
+          shortcuts,
+          permissionStatus,
+          onUpdateShortcut: updateShortcut,
+          onResetShortcut: resetShortcut
+        }
+      ) : null
+    ] })
+  ] });
+}
+function App() {
+  return new URLSearchParams(window.location.search).get("window") === "control-center" ? /* @__PURE__ */ jsxRuntimeExports.jsx(ControlCenterApp, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(PetApp, {});
 }
 const root = document.getElementById("root");
 if (root) {

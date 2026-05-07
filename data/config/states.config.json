@@ -3,6 +3,7 @@
     "idle",
     "coding",
     "thinking",
+    "waiting_auth",
     "success",
     "error",
     "reminder",
@@ -27,6 +28,7 @@
     "idle_hair"
   ],
   "priorities": {
+    "waiting_auth": 0,
     "error": 1,
     "reminder": 2,
     "coding": 3,

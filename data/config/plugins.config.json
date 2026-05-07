@@ -1,17 +1,32 @@
 {
   "plugins": {
     "codex_plugin": {
-      "enabled": false
+      "enabled": true,
+      "runtimeStatePath": "~/.desktop-ai-companion/runtime_state/codex_state.json",
+      "pollIntervalMs": 1000,
+      "thinkingTimeoutMs": 30000,
+      "successHoldMs": 4000,
+      "errorHoldMs": 8000
     },
     "weather_plugin": {
       "enabled": false
     },
     "reminder_plugin": {
-      "enabled": false
+      "enabled": true,
+      "databasePath": "data/sqlite/reminders.db",
+      "pollIntervalMs": 1000,
+      "defaultSnoozeMinutes": 10,
+      "quickCreateMinutes": [5, 15, 30]
+    },
+    "task_plugin": {
+      "enabled": true,
+      "databasePath": "data/sqlite/tasks.db",
+      "pollIntervalMs": 1000,
+      "stuckThresholdMs": 180000,
+      "recentLimit": 8
     },
     "calendar_plugin": {
       "enabled": false
     }
   }
 }
-

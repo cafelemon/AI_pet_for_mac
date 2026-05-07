@@ -7,9 +7,15 @@
   "renderer": {
     "defaultState": "idle",
     "assetRoot": "assets",
+    "keyframeRoot": "keyframes",
+    "webmRoot": "webm",
     "keyframeCanvas": {
       "width": 1536,
       "height": 1728
-    }
+    },
+    "defaultScale": 1,
+    "minScale": 0.75,
+    "maxScale": 1.25,
+    "scaleStep": 0.1
   }
 }

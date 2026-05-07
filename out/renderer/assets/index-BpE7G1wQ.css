@@ -63,71 +63,32 @@ body {
   cursor: grabbing;
 }
 
-.companion-media-frame {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: block;
-  pointer-events: none;
-  transform-origin: 50% 86%;
-  animation: companion-transition 240ms cubic-bezier(0.2, 0.9, 0.22, 1) both;
-}
-
-.companion-media {
-  position: absolute;
-  inset: 0;
+.companion-image {
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
-  background: transparent;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
   transform-origin: 50% 86%;
+  animation: companion-fade 220ms ease-out both;
 }
 
-.companion-video {
-  opacity: 1;
-  transition: opacity 180ms ease-out;
-}
-
-.companion-video--loading {
-  opacity: 0;
-}
-
-.companion-video--ready {
-  opacity: 1;
-}
-
-.companion-mask-image {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  background: transparent;
-  opacity: 0;
-  pointer-events: none;
-  user-select: none;
-  -webkit-user-drag: none;
-}
-
-.companion-image.companion-media--success {
+.companion-image--success {
   animation: companion-success 520ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
 }
 
-.companion-image.companion-media--error {
+.companion-image--error {
   animation: companion-error 380ms ease-out both;
 }
 
-.companion-image.companion-media--thinking,
-.companion-image.companion-media--sleep {
+.companion-image--thinking,
+.companion-image--sleep {
   animation: companion-breathe 2600ms ease-in-out infinite;
 }
 
-.companion-image.companion-media--reminder {
+.companion-image--reminder {
   animation: companion-reminder 920ms ease-in-out infinite;
 }
 
@@ -878,7 +839,7 @@ body {
   gap: 4px;
 }
 
-@keyframes companion-transition {
+@keyframes companion-fade {
   from {
     opacity: 0;
     transform: translateY(8px) scale(0.99);
