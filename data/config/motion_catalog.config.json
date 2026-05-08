@@ -1,0 +1,292 @@
+{
+  "actions": [
+    {
+      "id": "idle",
+      "label": "idle",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "默认待机：自然站立、呼吸、眨眼、轻微重心变化",
+      "runtime": true
+    },
+    {
+      "id": "coding",
+      "label": "coding",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "Codex 正在运行：小电脑前敲代码",
+      "runtime": true
+    },
+    {
+      "id": "sleep",
+      "label": "sleep",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "长时间无任务休眠：小杯子里睡觉，Zzz 漂浮",
+      "runtime": true
+    },
+    {
+      "id": "success",
+      "label": "success",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "任务完成：轻轻跳起，小烟花粒子爆开",
+      "runtime": true
+    },
+    {
+      "id": "error",
+      "label": "error",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "任务失败：鸭子坐，小阴云下雨",
+      "runtime": true
+    },
+    {
+      "id": "thinking",
+      "label": "thinking",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "loop",
+      "description": "长时间分析：趴着双手撑头，脚晃，问号变化",
+      "runtime": true
+    },
+    {
+      "id": "reminder",
+      "label": "reminder",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "事项提醒：手叉腰，手指向提醒气泡方向",
+      "runtime": true
+    },
+    {
+      "id": "idle_yawn",
+      "label": "yawn",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "待机打哈欠：轻轻打哈欠，结束回自然站姿",
+      "runtime": true
+    },
+    {
+      "id": "idle_hair",
+      "label": "hair",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "待机顺头发：轻轻整理头发，结束回自然站姿",
+      "runtime": true
+    },
+    {
+      "id": "idle_reading",
+      "label": "reading",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "short_loop",
+      "description": "侧坐看书：轻微翻页、眨眼",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_idle",
+      "label": "duck sit idle",
+      "category": "待机主姿态",
+      "stage": "Priority Idle V1",
+      "playback": "loop",
+      "description": "鸭子坐主待机姿态：稳定鸭子坐、轻微呼吸和眨眼",
+      "runtime": false
+    },
+    {
+      "id": "duck_sit_head_hair",
+      "label": "duck sit hair",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐歪头撩发：保持坐姿，轻轻歪头并整理发梢",
+      "runtime": false
+    },
+    {
+      "id": "duck_sit_finger_lip",
+      "label": "duck sit finger lip",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐含指抿唇：保持坐姿，手靠近嘴边做小表情",
+      "runtime": false
+    },
+    {
+      "id": "duck_sit_stretch",
+      "label": "duck sit stretch",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐伸懒腰：从鸭子坐轻轻舒展身体后回到坐姿",
+      "runtime": false
+    },
+    {
+      "id": "stand_to_duck_sit",
+      "label": "stand to duck sit",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "站立到鸭子坐：自然站立过渡到稳定鸭子坐",
+      "runtime": false
+    },
+    {
+      "id": "duck_sit_to_stand",
+      "label": "duck sit to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐到站立：从稳定坐姿自然站回站立",
+      "runtime": false
+    },
+    {
+      "id": "duck_sit_to_sleep",
+      "label": "duck sit to sleep",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐到睡眠：从鸭子坐自然进入小杯子或软垫睡眠姿态",
+      "runtime": false
+    },
+    {
+      "id": "bored",
+      "label": "bored",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "loop",
+      "description": "无聊发呆：托腮发呆、晃脚",
+      "runtime": false
+    },
+    {
+      "id": "stretch",
+      "label": "stretch",
+      "category": "生活互动",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "伸懒腰：休眠唤醒或长任务间隙",
+      "runtime": false
+    },
+    {
+      "id": "drink",
+      "label": "drink",
+      "category": "生活互动",
+      "stage": "PB3.1",
+      "playback": "short_loop",
+      "description": "喝水：长时间工作或待机插入",
+      "runtime": false
+    },
+    {
+      "id": "hide",
+      "label": "hide",
+      "category": "趣味互动",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "躲猫猫：趣味待机或点击互动",
+      "runtime": false
+    },
+    {
+      "id": "wave",
+      "label": "wave",
+      "category": "启动互动",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "打招呼：启动、唤醒或点击时单手挥手",
+      "runtime": false
+    },
+    {
+      "id": "loading",
+      "label": "loading",
+      "category": "任务过渡",
+      "stage": "PB3.2",
+      "playback": "loop",
+      "description": "任务启动/加载中：小幅悬浮或环形进度感",
+      "runtime": false
+    },
+    {
+      "id": "search",
+      "label": "search",
+      "category": "任务过渡",
+      "stage": "PB3.2",
+      "playback": "short_loop",
+      "description": "检索查找：踮脚张望、放大镜光效",
+      "runtime": false
+    },
+    {
+      "id": "explain",
+      "label": "explain",
+      "category": "任务过渡",
+      "stage": "PB3.2",
+      "playback": "short_loop",
+      "description": "讲解说明：侧身抬手比划，气泡由前端渲染",
+      "runtime": false
+    },
+    {
+      "id": "update",
+      "label": "update",
+      "category": "系统状态",
+      "stage": "PB3.2",
+      "playback": "loop",
+      "description": "版本更新/配置变更：轻微发光、环形刷新粒子",
+      "runtime": false
+    },
+    {
+      "id": "shy",
+      "label": "shy",
+      "category": "情绪反馈",
+      "stage": "PB3.3",
+      "playback": "one_shot",
+      "description": "害羞：低头、小幅扭捏",
+      "runtime": false
+    },
+    {
+      "id": "angry",
+      "label": "angry",
+      "category": "情绪反馈",
+      "stage": "PB3.3",
+      "playback": "one_shot",
+      "description": "小生气：双手叉腰、轻微不满",
+      "runtime": false
+    },
+    {
+      "id": "cheer",
+      "label": "cheer",
+      "category": "情绪反馈",
+      "stage": "PB3.3",
+      "playback": "one_shot",
+      "description": "打气加油：握拳鼓劲",
+      "runtime": false
+    },
+    {
+      "id": "confused",
+      "label": "confused",
+      "category": "情绪反馈",
+      "stage": "PB3.3",
+      "playback": "short_loop",
+      "description": "疑惑：歪头疑惑、问号绕头",
+      "runtime": false
+    },
+    {
+      "id": "bye",
+      "label": "bye",
+      "category": "退出状态",
+      "stage": "PB3.3",
+      "playback": "one_shot",
+      "description": "告别：挥手告别并淡出",
+      "runtime": false
+    },
+    {
+      "id": "happy",
+      "label": "happy",
+      "category": "情绪增强",
+      "stage": "PB3.3",
+      "playback": "short_loop",
+      "description": "单纯开心：success 后衔接的小幅开心动作",
+      "runtime": false
+    }
+  ]
+}

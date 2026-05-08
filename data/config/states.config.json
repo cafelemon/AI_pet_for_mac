@@ -15,6 +15,61 @@
     "idle_yawn",
     "idle_hair"
   ],
+  "idleMotion": {
+    "enabled": true,
+    "minDelayMs": 30000,
+    "maxDelayMs": 60000,
+    "variants": [
+      "idle_yawn",
+      "idle_hair",
+      "idle_reading"
+    ]
+  },
+  "motions": {
+    "idle": {
+      "playback": "loop",
+      "durationMs": 5000
+    },
+    "coding": {
+      "playback": "loop",
+      "durationMs": 5000
+    },
+    "thinking": {
+      "playback": "loop",
+      "durationMs": 5000
+    },
+    "success": {
+      "playback": "one_shot",
+      "durationMs": 2400
+    },
+    "error": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "reminder": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "sleep": {
+      "playback": "loop",
+      "durationMs": 6000
+    },
+    "idle_reading": {
+      "playback": "loop",
+      "durationMs": 5200,
+      "idleWeight": 1
+    },
+    "idle_yawn": {
+      "playback": "one_shot",
+      "durationMs": 3000,
+      "idleWeight": 1
+    },
+    "idle_hair": {
+      "playback": "one_shot",
+      "durationMs": 2600,
+      "idleWeight": 1
+    }
+  },
   "pa0KeyframeFolders": [
     "idle",
     "coding",

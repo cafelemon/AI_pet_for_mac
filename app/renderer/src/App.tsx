@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent, ReactElement } from 'react';
 
 import { Bubble } from '../components/Bubble';
@@ -67,6 +67,12 @@ const DEFAULT_WINDOW_CONTROLS: WindowControls = {
   mousePassthrough: true
 };
 const DEFAULT_SNOOZE_MINUTES = 10;
+const DEFAULT_IDLE_MOTION = {
+  enabled: true,
+  minDelayMs: 30000,
+  maxDelayMs: 60000,
+  variants: ['idle_yawn', 'idle_hair', 'idle_reading']
+};
 const EMPTY_TASK_SNAPSHOT: TaskCenterSnapshot = {
   today: [],
   currentCodex: null,
@@ -141,6 +147,33 @@ function codexBubbleMessage(codexState: CodexRenderState | null, state: Companio
 
 function statePriority(state: CompanionState, statesConfig: StatesConfig): number {
   return statesConfig.priorities[state] ?? 999;
+}
+
+function randomDelay(minDelayMs: number, maxDelayMs: number): number {
+  const min = Math.max(0, minDelayMs);
+  const max = Math.max(min, maxDelayMs);
+  return Math.round(min + Math.random() * (max - min));
+}
+
+function weightedRandomKeyframe(keyframes: KeyframeDescriptor[]): KeyframeDescriptor | null {
+  if (keyframes.length === 0) {
+    return null;
+  }
+
+  const totalWeight = keyframes.reduce((sum, keyframe) => sum + Math.max(0, keyframe.motion.idleWeight ?? 1), 0);
+  if (totalWeight <= 0) {
+    return keyframes[Math.floor(Math.random() * keyframes.length)] ?? null;
+  }
+
+  let cursor = Math.random() * totalWeight;
+  for (const keyframe of keyframes) {
+    cursor -= Math.max(0, keyframe.motion.idleWeight ?? 1);
+    if (cursor <= 0) {
+      return keyframe;
+    }
+  }
+
+  return keyframes[keyframes.length - 1] ?? null;
 }
 
 function moduleFromSearch(): ControlCenterModule {
@@ -230,6 +263,144 @@ function useRuntimeState(): {
   return { codexState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
 }
 
+function PetRenderer({
+  companionConfig,
+  statesConfig,
+  manualSelection,
+  codexState,
+  reminderState,
+  taskNotification,
+  keyframes,
+  catalog,
+  onHitRegionsChange
+}: {
+  companionConfig: CompanionConfig;
+  statesConfig: StatesConfig;
+  manualSelection: ManualRenderSelection | null;
+  codexState: CodexRenderState | null;
+  reminderState: ReminderNotification | null;
+  taskNotification: TaskNotification | null;
+  keyframes: KeyframeDescriptor[];
+  catalog: CompanionCatalog;
+  onHitRegionsChange: (regions: MouseHitRegion[]) => void;
+}): ReactElement | null {
+  const [idleMotionFolder, setIdleMotionFolder] = useState<string | null>(null);
+  const idleMotionTimerRef = useRef<number | null>(null);
+  const clearIdleMotionTimer = useCallback((): void => {
+    if (idleMotionTimerRef.current !== null) {
+      window.clearTimeout(idleMotionTimerRef.current);
+      idleMotionTimerRef.current = null;
+    }
+  }, []);
+
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const codexOverride = codexState && codexState.state !== 'idle' ? codexState : null;
+  const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
+  const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
+  const runtimeCandidates: Array<{ source: 'codex' | 'reminder' | 'task'; state: CompanionState }> = [];
+
+  if (codexOverride) {
+    runtimeCandidates.push({ source: 'codex', state: codexOverride.state });
+  }
+  if (reminderOverride) {
+    runtimeCandidates.push({ source: 'reminder', state: reminderOverride.state });
+  }
+  if (taskOverride) {
+    runtimeCandidates.push({ source: 'task', state: taskOverride.state });
+  }
+
+  const runtimeOverride =
+    runtimeCandidates.sort(
+      (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
+    )[0] ?? null;
+  const renderedState = runtimeOverride?.state ?? selection.state;
+  const canPlayIdleMotion = !runtimeOverride && selection.state === 'idle' && !selection.variant;
+  const renderedVariant = runtimeOverride ? null : idleMotionFolder ?? selection.variant;
+  const activeKeyframe =
+    (renderedState === 'idle' && renderedVariant ? catalog.byFolder.get(renderedVariant) : undefined) ??
+    catalog.byState.get(renderedState) ??
+    catalog.byState.get('idle') ??
+    keyframes[0];
+  const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
+
+  useEffect(() => {
+    if (!canPlayIdleMotion) {
+      clearIdleMotionTimer();
+      setIdleMotionFolder(null);
+      return undefined;
+    }
+    if (idleMotionFolder) {
+      return undefined;
+    }
+
+    const idleMotionConfig = statesConfig.idleMotion ?? DEFAULT_IDLE_MOTION;
+    if (!idleMotionConfig.enabled) {
+      return undefined;
+    }
+
+    const idleMotionKeyframes = idleMotionConfig.variants
+      .map((variant) => catalog.byFolder.get(variant))
+      .filter((variant): variant is KeyframeDescriptor => Boolean(variant));
+    if (idleMotionKeyframes.length === 0) {
+      return undefined;
+    }
+
+    idleMotionTimerRef.current = window.setTimeout(() => {
+      const nextMotion = weightedRandomKeyframe(idleMotionKeyframes);
+      if (nextMotion) {
+        setIdleMotionFolder(nextMotion.folder);
+      }
+    }, randomDelay(idleMotionConfig.minDelayMs, idleMotionConfig.maxDelayMs));
+
+    return clearIdleMotionTimer;
+  }, [canPlayIdleMotion, catalog.byFolder, clearIdleMotionTimer, idleMotionFolder, statesConfig.idleMotion]);
+
+  useEffect(() => {
+    if (!idleMotionFolder || !activeKeyframe) {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setIdleMotionFolder(null);
+    }, activeMotionDurationMs);
+    return () => window.clearTimeout(timer);
+  }, [activeMotionDurationMs, idleMotionFolder]);
+
+  const handleMotionComplete = useCallback((): void => {
+    if (idleMotionFolder) {
+      setIdleMotionFolder(null);
+    }
+  }, [idleMotionFolder]);
+
+  if (!activeKeyframe) {
+    return null;
+  }
+
+  const bubbleMessage =
+    runtimeOverride?.source === 'reminder' && reminderOverride
+      ? reminderOverride.message
+      : runtimeOverride?.source === 'task' && taskOverride
+        ? taskOverride.message
+        : codexBubbleMessage(runtimeOverride?.source === 'codex' ? codexOverride : null, renderedState);
+
+  return (
+    <main className="companion-shell">
+      <div className="companion-stage">
+        <Companion
+          key={`${renderedState}:${activeKeyframe.folder}`}
+          keyframe={activeKeyframe}
+          canvas={companionConfig.renderer.keyframeCanvas}
+          state={renderedState}
+          onHitTesterChange={() => undefined}
+          onHitRegionsChange={onHitRegionsChange}
+          onMotionComplete={handleMotionComplete}
+        />
+      </div>
+      <Bubble state={renderedState} message={bubbleMessage} actions={null} />
+    </main>
+  );
+}
+
 function PetApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
@@ -271,59 +442,18 @@ function PetApp(): ReactElement | null {
     return null;
   }
 
-  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
-  const codexOverride = codexState && codexState.state !== 'idle' ? codexState : null;
-  const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
-  const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
-  const runtimeCandidates: Array<{ source: 'codex' | 'reminder' | 'task'; state: CompanionState }> = [];
-
-  if (codexOverride) {
-    runtimeCandidates.push({ source: 'codex', state: codexOverride.state });
-  }
-  if (reminderOverride) {
-    runtimeCandidates.push({ source: 'reminder', state: reminderOverride.state });
-  }
-  if (taskOverride) {
-    runtimeCandidates.push({ source: 'task', state: taskOverride.state });
-  }
-
-  const runtimeOverride =
-    runtimeCandidates.sort(
-      (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
-    )[0] ?? null;
-  const renderedState = runtimeOverride?.state ?? selection.state;
-  const renderedVariant = runtimeOverride ? null : selection.variant;
-  const activeKeyframe =
-    (renderedState === 'idle' && renderedVariant ? catalog.byFolder.get(renderedVariant) : undefined) ??
-    catalog.byState.get(renderedState) ??
-    catalog.byState.get('idle') ??
-    keyframes[0];
-
-  if (!activeKeyframe) {
-    return null;
-  }
-
-  const bubbleMessage =
-    runtimeOverride?.source === 'reminder' && reminderOverride
-      ? reminderOverride.message
-      : runtimeOverride?.source === 'task' && taskOverride
-        ? taskOverride.message
-        : codexBubbleMessage(runtimeOverride?.source === 'codex' ? codexOverride : null, renderedState);
-
   return (
-    <main className="companion-shell">
-      <div className="companion-stage">
-        <Companion
-          key={`${renderedState}:${activeKeyframe.folder}`}
-          keyframe={activeKeyframe}
-          canvas={companionConfig.renderer.keyframeCanvas}
-          state={renderedState}
-          onHitTesterChange={() => undefined}
-          onHitRegionsChange={publishHitRegions}
-        />
-      </div>
-      <Bubble state={renderedState} message={bubbleMessage} actions={null} />
-    </main>
+    <PetRenderer
+      companionConfig={companionConfig}
+      statesConfig={statesConfig}
+      manualSelection={manualSelection}
+      codexState={codexState}
+      reminderState={reminderState}
+      taskNotification={taskNotification}
+      keyframes={keyframes}
+      catalog={catalog}
+      onHitRegionsChange={publishHitRegions}
+    />
   );
 }
 

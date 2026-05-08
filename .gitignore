@@ -11,4 +11,5 @@ data/logs/*
 !data/logs/.gitkeep
 data/runtime_state/*
 !data/runtime_state/.gitkeep
-
+assets/states/*/source/*
+!assets/states/*/source/.gitkeep

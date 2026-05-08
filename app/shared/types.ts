@@ -24,7 +24,24 @@ export interface StatesConfig {
   states: string[];
   idleVariants: string[];
   pa0KeyframeFolders: string[];
+  idleMotion?: IdleMotionConfig;
+  motions?: Record<string, MotionConfig>;
   priorities: Record<string, number>;
+}
+
+export type MotionPlayback = 'loop' | 'one_shot';
+
+export interface MotionConfig {
+  playback: MotionPlayback;
+  durationMs: number;
+  idleWeight?: number;
+}
+
+export interface IdleMotionConfig {
+  enabled: boolean;
+  minDelayMs: number;
+  maxDelayMs: number;
+  variants: string[];
 }
 
 export interface PluginsConfig {
@@ -282,7 +299,10 @@ export interface KeyframeDescriptor {
   folder: string;
   state: string;
   label: string;
+  motion: MotionConfig;
   webmRelativePath: string;
+  sourceVideoRelativePaths?: string[];
+  sourceVideoRelativePath: string;
   fallbackRelativePath: string;
   relativePath: string;
 }

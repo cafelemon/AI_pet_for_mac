@@ -12,12 +12,14 @@ interface CompanionProps {
   state: CompanionState;
   onHitTesterChange: (hitTester: ((x: number, y: number) => boolean) | null) => void;
   onHitRegionsChange: (regions: MouseHitRegion[]) => void;
+  onMotionComplete: () => void;
 }
 
 const ALPHA_HIT_THRESHOLD = 16;
 const ALPHA_REGION_BAND_HEIGHT = 3;
 
 type VideoStatus = 'loading' | 'ready' | 'failed';
+type VideoSourceKind = 'webm' | 'source';
 
 function regionFromMediaBounds(element: HTMLElement): MouseHitRegion {
   const rect = element.getBoundingClientRect();
@@ -94,13 +96,21 @@ export function Companion({
   canvas,
   state,
   onHitTesterChange,
-  onHitRegionsChange
+  onHitRegionsChange,
+  onMotionComplete
 }: CompanionProps): ReactElement {
   const mediaFrameRef = useRef<HTMLDivElement | null>(null);
   const maskImageRef = useRef<HTMLImageElement | null>(null);
   const fallbackRelativePath = keyframe.fallbackRelativePath ?? keyframe.relativePath;
   const fallbackAssetUrl = window.companionAPI.assetUrl(fallbackRelativePath);
-  const videoAssetUrl = window.companionAPI.assetUrl(keyframe.webmRelativePath);
+  const [videoSourceKind, setVideoSourceKind] = useState<VideoSourceKind>('webm');
+  const [sourceVideoIndex, setSourceVideoIndex] = useState(0);
+  const sourceVideoRelativePaths = keyframe.sourceVideoRelativePaths ?? [keyframe.sourceVideoRelativePath];
+  const videoRelativePath =
+    videoSourceKind === 'webm'
+      ? keyframe.webmRelativePath
+      : (sourceVideoRelativePaths[sourceVideoIndex] ?? keyframe.sourceVideoRelativePath);
+  const videoAssetUrl = window.companionAPI.assetUrl(videoRelativePath);
   const [fallbackDisplayUrl, setFallbackDisplayUrl] = useState(fallbackAssetUrl);
   const [videoStatus, setVideoStatus] = useState<VideoStatus>('loading');
   const buildHitTester = useCallback((): void => {
@@ -187,8 +197,19 @@ export function Companion({
   }, [fallbackAssetUrl]);
 
   useEffect(() => {
+    setVideoSourceKind('webm');
+    setSourceVideoIndex(0);
     setVideoStatus('loading');
   }, [keyframe.webmRelativePath]);
+
+  useEffect(() => {
+    if (keyframe.motion.playback !== 'one_shot' || videoStatus === 'ready') {
+      return undefined;
+    }
+
+    const timer = window.setTimeout(onMotionComplete, keyframe.motion.durationMs);
+    return () => window.clearTimeout(timer);
+  }, [keyframe.motion.durationMs, keyframe.motion.playback, onMotionComplete, videoStatus]);
 
   useEffect(() => {
     onHitTesterChange(null);
@@ -212,8 +233,25 @@ export function Companion({
   }, []);
 
   const handleVideoError = useCallback((): void => {
+    if (videoSourceKind === 'webm' && sourceVideoRelativePaths.length > 0) {
+      setVideoSourceKind('source');
+      setSourceVideoIndex(0);
+      setVideoStatus('loading');
+      return;
+    }
+    if (videoSourceKind === 'source' && sourceVideoIndex < sourceVideoRelativePaths.length - 1) {
+      setSourceVideoIndex((currentIndex) => currentIndex + 1);
+      setVideoStatus('loading');
+      return;
+    }
     setVideoStatus('failed');
-  }, []);
+  }, [sourceVideoIndex, sourceVideoRelativePaths.length, videoSourceKind]);
+
+  const handleVideoEnded = useCallback((): void => {
+    if (keyframe.motion.playback === 'one_shot') {
+      onMotionComplete();
+    }
+  }, [keyframe.motion.playback, onMotionComplete]);
 
   return (
     <div ref={mediaFrameRef} className={`companion-media-frame companion-media-frame--${state}`}>
@@ -227,12 +265,13 @@ export function Companion({
         width={canvas.width}
         height={canvas.height}
         autoPlay
-        loop
+        loop={keyframe.motion.playback === 'loop'}
         muted
         playsInline
         preload="auto"
         aria-hidden="true"
         onCanPlay={handleVideoCanPlay}
+        onEnded={handleVideoEnded}
         onError={handleVideoError}
       />
       <img

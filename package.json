@@ -9,7 +9,10 @@
     "build": "npm run typecheck && electron-vite build",
     "typecheck": "tsc --noEmit",
     "asset:check": "python3 scripts/asset_check.py",
-    "asset:check:strict": "python3 scripts/asset_check.py --strict"
+    "asset:check:strict": "python3 scripts/asset_check.py --strict",
+    "pb2:keyframes": "python3 scripts/prepare_pb2_keyframes.py",
+    "pb2:video:check": "python3 scripts/pb2_video_pipeline.py check --skip-missing",
+    "motion:progress": "python3 scripts/update_motion_progress.py --ensure-dirs"
   },
   "dependencies": {
     "react": "^19.2.6",

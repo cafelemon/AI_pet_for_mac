@@ -7,6 +7,7 @@ Current scaffold status:
 - Base directories follow `desktop_ai_companion_roadmap_v_2.md`.
 - PA0 keyframes are normalized transparent `1536x1728` PNG assets.
 - PB1 supports optional transparent WebM loops from `assets/webm/` with PNG fallback.
+- PB2 adds motion metadata, idle random actions, and a provider-aware source-video handoff.
 - Original PA0 source photos are preserved under `assets/character/reference/pa0_raw/`.
 - PA0 specs live in `docs/pa0/`.
 - Asset validation starts from `scripts/asset_check.py`.
@@ -14,7 +15,7 @@ Current scaffold status:
 ## Phase Order
 
 ```text
-PA0 -> PA1 -> PA2 -> PA3 -> PA4 -> PA6 -> PA7 -> PB1
+PA0 -> PA1 -> PA2 -> PA3 -> PA4 -> PA6 -> PA7 -> PB1 -> PB2
 ```
 
 PA0 focuses on keyframe folders, naming rules, state action specs, and asset checks.
@@ -40,6 +41,27 @@ PA3 opens a frameless `512x576` always-on-top Electron window and renders PA0 PN
 PA7 keeps the pet window fully mouse-through by default. Use `Command+Shift+Space` to open the independent Control Center near the cursor. With macOS input permissions granted, use `Option+Left Click` on the pet to drag it and `Option+Right Click` on the pet to open the Control Center. Legacy F2/F3/F4/F5 shortcuts are disabled by default and can be restored from Control Center settings.
 
 PB1 upgrades the renderer to prefer transparent WebM loops at `assets/webm/<state>/<state>_loop.webm`. If a WebM asset is missing or fails to play, the renderer keeps showing the PNG fallback at `assets/keyframes/<state>/<state>_01.png`. `waiting_auth` continues to render through the `reminder` asset.
+
+PB2 adds complete state-motion metadata and idle random small actions. Generate the white-background reference pack before producing source videos:
+
+```bash
+python3 scripts/prepare_pb2_keyframes.py
+```
+
+Place source videos under `assets/states/<state>/source/`, record provider and mask strategy in `data/config/motion_sources.config.json`, then convert them to transparent WebM when ffmpeg is available:
+
+```bash
+python3 scripts/pb2_video_pipeline.py check --skip-missing
+python3 scripts/pb2_video_pipeline.py convert --state coding
+```
+
+Before WebM conversion, the renderer can use those local MP4 files as a white-background motion preview.
+
+Track the full PB3 action pool and local video coverage:
+
+```bash
+npm run motion:progress
+```
 
 Validate the current PNG fallback set:
 

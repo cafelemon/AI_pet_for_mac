@@ -1,10 +1,10 @@
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, screen, shell } from 'electron';
 import type { MenuItemConstructorOptions, Rectangle } from 'electron';
-import { watch } from 'node:fs';
+import { existsSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, join, normalize, resolve } from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type {
@@ -92,12 +92,39 @@ protocol.registerSchemesAsPrivileged([
     privileges: {
       standard: true,
       secure: true,
-      supportFetchAPI: true
+      supportFetchAPI: true,
+      stream: true
     }
   }
 ]);
 
-const projectRoot = app.getAppPath();
+function hasProjectAssets(candidate: string): boolean {
+  return (
+    existsSync(join(candidate, 'data', 'config', 'companion.config.json')) &&
+    existsSync(join(candidate, 'assets'))
+  );
+}
+
+function resolveProjectRoot(): string {
+  const candidates = [
+    process.env.DESKTOP_AI_COMPANION_ROOT,
+    process.cwd(),
+    app.getAppPath(),
+    resolve(__dirname, '../..'),
+    resolve(__dirname, '../../..')
+  ].filter((candidate): candidate is string => Boolean(candidate));
+
+  for (const candidate of candidates) {
+    const absoluteCandidate = resolve(candidate);
+    if (hasProjectAssets(absoluteCandidate)) {
+      return absoluteCandidate;
+    }
+  }
+
+  return app.getAppPath();
+}
+
+const projectRoot = resolveProjectRoot();
 let activeCompanionConfig: CompanionConfig | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let controlCenterWindowRef: BrowserWindow | null = null;
@@ -1249,9 +1276,14 @@ function registerAssetProtocol(): void {
     const rawRelativePath = decodeURIComponent(`${requestUrl.hostname}${requestUrl.pathname}`);
     const relativePath = normalize(rawRelativePath).replace(/^(\.\.(\/|\\|$))+/, '').replace(/^(\/|\\)+/, '');
     const absolutePath = resolve(projectRoot, relativePath);
+    const pathFromRoot = relative(projectRoot, absolutePath);
 
-    if (!absolutePath.startsWith(projectRoot)) {
+    if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
       return new Response('Invalid asset path', { status: 400 });
+    }
+    if (!existsSync(absolutePath)) {
+      console.warn(`Asset not found: ${relativePath} -> ${absolutePath}`);
+      return new Response('Asset not found', { status: 404 });
     }
 
     return net.fetch(pathToFileURL(absolutePath).toString());

@@ -1008,11 +1008,31 @@ electron.protocol.registerSchemesAsPrivileged([
     privileges: {
       standard: true,
       secure: true,
-      supportFetchAPI: true
+      supportFetchAPI: true,
+      stream: true
     }
   }
 ]);
-const projectRoot = electron.app.getAppPath();
+function hasProjectAssets(candidate) {
+  return node_fs.existsSync(node_path.join(candidate, "data", "config", "companion.config.json")) && node_fs.existsSync(node_path.join(candidate, "assets"));
+}
+function resolveProjectRoot() {
+  const candidates = [
+    process.env.DESKTOP_AI_COMPANION_ROOT,
+    process.cwd(),
+    electron.app.getAppPath(),
+    node_path.resolve(__dirname, "../.."),
+    node_path.resolve(__dirname, "../../..")
+  ].filter((candidate) => Boolean(candidate));
+  for (const candidate of candidates) {
+    const absoluteCandidate = node_path.resolve(candidate);
+    if (hasProjectAssets(absoluteCandidate)) {
+      return absoluteCandidate;
+    }
+  }
+  return electron.app.getAppPath();
+}
+const projectRoot = resolveProjectRoot();
 let activeCompanionConfig = null;
 let mainWindowRef = null;
 let controlCenterWindowRef = null;
@@ -1938,8 +1958,13 @@ function registerAssetProtocol() {
     const rawRelativePath = decodeURIComponent(`${requestUrl.hostname}${requestUrl.pathname}`);
     const relativePath = node_path.normalize(rawRelativePath).replace(/^(\.\.(\/|\\|$))+/, "").replace(/^(\/|\\)+/, "");
     const absolutePath = node_path.resolve(projectRoot, relativePath);
-    if (!absolutePath.startsWith(projectRoot)) {
+    const pathFromRoot = node_path.relative(projectRoot, absolutePath);
+    if (pathFromRoot.startsWith("..") || node_path.isAbsolute(pathFromRoot)) {
       return new Response("Invalid asset path", { status: 400 });
+    }
+    if (!node_fs.existsSync(absolutePath)) {
+      console.warn(`Asset not found: ${relativePath} -> ${absolutePath}`);
+      return new Response("Asset not found", { status: 404 });
     }
     return electron.net.fetch(node_url.pathToFileURL(absolutePath).toString());
   });

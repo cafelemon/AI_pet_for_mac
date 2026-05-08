@@ -1,0 +1,104 @@
+{
+  "defaults": {
+    "provider": "unknown",
+    "sourceFile": null,
+    "maskPreset": "none",
+    "mattePreset": "white"
+  },
+  "sources": {
+    "idle": {
+      "provider": "jimeng",
+      "sourceFile": "idle_jimeng.mp4",
+      "maskPreset": "jimeng_corner"
+    },
+    "coding": {
+      "provider": "jimeng",
+      "sourceFile": "coding_jimeng.mp4",
+      "maskPreset": "jimeng_corner"
+    },
+    "sleep": {
+      "provider": "kling",
+      "sourceFile": "sleep_jimeng.mp4",
+      "maskPreset": "kling_corner"
+    },
+    "success": {
+      "provider": "kling",
+      "sourceFile": "kling_success.mp4",
+      "maskPreset": "kling_corner"
+    },
+    "error": {
+      "provider": "kling",
+      "sourceFile": "error_jimeng.mp4",
+      "maskPreset": "kling_corner"
+    },
+    "thinking": {
+      "provider": "kling",
+      "sourceFile": "thinking_jimeng.mp4",
+      "maskPreset": "kling_corner"
+    },
+    "reminder": {
+      "provider": "jimeng",
+      "sourceFile": "reminder_jimeng.mp4",
+      "maskPreset": "jimeng_corner"
+    },
+    "idle_yawn": {
+      "provider": "jimeng",
+      "sourceFile": "idle_yawn_jimeng.mp4",
+      "maskPreset": "jimeng_corner"
+    },
+    "idle_hair": {
+      "provider": "jimeng",
+      "sourceFile": "idle_hair_jimeng.mp4",
+      "maskPreset": "jimeng_corner",
+      "mattePreset": "neutral_floor"
+    },
+    "idle_reading": {
+      "provider": "jimeng",
+      "sourceFile": "idle_reading_jimeng.mp4",
+      "maskPreset": "jimeng_corner",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_idle": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_idle_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_head_hair": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_head_hair_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_finger_lip": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_finger_lip_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_stretch": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_stretch_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "stand_to_duck_sit": {
+      "provider": "unknown",
+      "sourceFile": "stand_to_duck_sit_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_to_stand": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_to_stand_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "duck_sit_to_sleep": {
+      "provider": "unknown",
+      "sourceFile": "duck_sit_to_sleep_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "white"
+    }
+  }
+}

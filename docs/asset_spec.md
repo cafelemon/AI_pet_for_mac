@@ -13,3 +13,25 @@ PB1 prefers transparent WebM loops when they are available and falls back to PA0
 - Idle variants may use the same pattern: `assets/webm/idle_yawn/idle_yawn_loop.webm`.
 
 Run `npm run asset:check:strict` to validate the existing PNG fallback set. Run `python3 scripts/asset_check.py --strict --webm-strict` only when every PB1 loop asset is expected to exist.
+
+## PB2 Motion Source Assets
+
+PB2 source videos are local handoff files from Jimeng, Kling, or another generator, and should live under:
+
+```text
+assets/states/<state>/source/
+```
+
+Record the source file name, provider, and watermark mask preset in `data/config/motion_sources.config.json`. The source directories are kept with `.gitkeep`, while raw source videos are ignored by git. Generate the reference pack with:
+
+```bash
+python3 scripts/prepare_pb2_keyframes.py
+```
+
+Convert source videos into runtime WebM assets with:
+
+```bash
+python3 scripts/pb2_video_pipeline.py convert --state <state>
+```
+
+See `docs/pb2/README.md` for the full PB2 handoff and QA workflow.
