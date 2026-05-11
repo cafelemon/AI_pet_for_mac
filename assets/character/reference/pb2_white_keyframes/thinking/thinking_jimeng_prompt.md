@@ -5,7 +5,7 @@
 - 播放类型：`loop`
 - 建议时长：4-5 秒
 - 动作：趴着双手撑头，脚晃，问号变化
-- 源视频放置：`assets/states/thinking/source/thinking_jimeng.mp4`
+- 源视频放置：`assets/states/thinking/source/kling_thinking.mp4`
 - 最终 WebM：`assets/webm/thinking/thinking_loop.webm`
 
 ## 即梦提示词
@@ -14,6 +14,6 @@
 画面要求：9:16 竖屏，纯白背景，固定镜头，主体完整不裁切，无阴影，无地面，无水印，无字幕。
 角色要求：保持参考图中的同一个真人桌宠角色、服装、发型、面部一致，不要改变年龄、体型、五官或服饰。
 动作要求：动作自然轻微，适合作为透明桌宠循环或短动作，动作幅度不要过大。
-输出要求：尽量导出 MP4，文件名按 <state>_jimeng.mp4 命名。
+输出要求：尽量导出 MP4，当前项目接入文件名为 `kling_thinking.mp4`。
 
 具体动作：让角色趴着双手撑头思考，脚丫轻轻晃动，头上出现小问号并轻微浮动变化。

@@ -512,7 +512,9 @@ function isManualRenderSelection(value: unknown): value is ManualRenderSelection
     isRecord(value) &&
     typeof value.state === 'string' &&
     COMPANION_STATES.has(value.state) &&
-    (value.variant === null || typeof value.variant === 'string')
+    (value.variant === null || typeof value.variant === 'string') &&
+    (value.folder === undefined || value.folder === null || typeof value.folder === 'string') &&
+    (value.replayId === undefined || typeof value.replayId === 'number')
   );
 }
 
@@ -529,7 +531,9 @@ function registerManualRenderHandlers(): void {
 
     manualRenderSelection = {
       state: selection.state,
-      variant: selection.variant
+      variant: selection.variant,
+      folder: selection.folder ?? selection.variant ?? null,
+      replayId: selection.replayId
     };
     publishManualRenderSelection();
     return manualRenderSelection;

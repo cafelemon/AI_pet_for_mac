@@ -12460,8 +12460,8 @@ function Bubble({ state, message, actions }) {
 }
 const ALPHA_HIT_THRESHOLD = 16;
 const ALPHA_REGION_BAND_HEIGHT = 3;
-function regionFromImageBounds(image) {
-  const rect = image.getBoundingClientRect();
+function regionFromMediaBounds(element) {
+  const rect = element.getBoundingClientRect();
   return {
     x: Math.round(rect.left),
     y: Math.round(rect.top),
@@ -12469,8 +12469,8 @@ function regionFromImageBounds(image) {
     height: Math.round(rect.height)
   };
 }
-function buildAlphaHitRegions(image, context, sourceWidth, sourceHeight) {
-  const rect = image.getBoundingClientRect();
+function buildAlphaHitRegions(element, context, sourceWidth, sourceHeight) {
+  const rect = element.getBoundingClientRect();
   const cssWidth = Math.max(1, Math.round(rect.width));
   const cssHeight = Math.max(1, Math.round(rect.height));
   const imageData = context.getImageData(0, 0, sourceWidth, sourceHeight).data;
@@ -12520,14 +12520,24 @@ function Companion({
   canvas,
   state,
   onHitTesterChange,
-  onHitRegionsChange
+  onHitRegionsChange,
+  onMotionComplete
 }) {
-  const imageRef = reactExports.useRef(null);
-  const imageUrl = window.companionAPI.assetUrl(keyframe.relativePath);
-  const [displayUrl, setDisplayUrl] = reactExports.useState(imageUrl);
+  const mediaFrameRef = reactExports.useRef(null);
+  const maskImageRef = reactExports.useRef(null);
+  const fallbackRelativePath = keyframe.fallbackRelativePath ?? keyframe.relativePath;
+  const fallbackAssetUrl = window.companionAPI.assetUrl(fallbackRelativePath);
+  const [videoSourceKind, setVideoSourceKind] = reactExports.useState("webm");
+  const [sourceVideoIndex, setSourceVideoIndex] = reactExports.useState(0);
+  const sourceVideoRelativePaths = keyframe.sourceVideoRelativePaths ?? [keyframe.sourceVideoRelativePath];
+  const videoRelativePath = videoSourceKind === "webm" ? keyframe.webmRelativePath : sourceVideoRelativePaths[sourceVideoIndex] ?? keyframe.sourceVideoRelativePath;
+  const videoAssetUrl = window.companionAPI.assetUrl(videoRelativePath);
+  const [fallbackDisplayUrl, setFallbackDisplayUrl] = reactExports.useState(fallbackAssetUrl);
+  const [videoStatus, setVideoStatus] = reactExports.useState("loading");
   const buildHitTester = reactExports.useCallback(() => {
-    const image = imageRef.current;
-    if (!image || !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+    const image = maskImageRef.current;
+    const mediaFrame = mediaFrameRef.current;
+    if (!image || !mediaFrame || !image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
       onHitTesterChange(null);
       return;
     }
@@ -12541,9 +12551,9 @@ function Companion({
     }
     try {
       context.drawImage(image, 0, 0, maskCanvas.width, maskCanvas.height);
-      onHitRegionsChange(buildAlphaHitRegions(image, context, maskCanvas.width, maskCanvas.height));
+      onHitRegionsChange(buildAlphaHitRegions(mediaFrame, context, maskCanvas.width, maskCanvas.height));
       onHitTesterChange((x, y) => {
-        const rect = image.getBoundingClientRect();
+        const rect = mediaFrame.getBoundingClientRect();
         if (x < rect.left || x > rect.right || y < rect.top || y > rect.bottom) {
           return false;
         }
@@ -12555,9 +12565,9 @@ function Companion({
       });
     } catch (error) {
       console.warn("Falling back to keyframe bounds hit testing.", error);
-      onHitRegionsChange([regionFromImageBounds(image)]);
+      onHitRegionsChange([regionFromMediaBounds(mediaFrame)]);
       onHitTesterChange((x, y) => {
-        const rect = image.getBoundingClientRect();
+        const rect = mediaFrame.getBoundingClientRect();
         return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
       });
     }
@@ -12565,17 +12575,22 @@ function Companion({
   reactExports.useEffect(() => {
     let cancelled = false;
     let objectUrl = null;
-    setDisplayUrl(imageUrl);
-    fetch(imageUrl).then((response) => response.blob()).then((blob) => {
+    setFallbackDisplayUrl(fallbackAssetUrl);
+    fetch(fallbackAssetUrl).then((response) => {
+      if (!response.ok) {
+        throw new Error(`Fallback keyframe request failed with ${response.status}`);
+      }
+      return response.blob();
+    }).then((blob) => {
       if (cancelled) {
         return;
       }
       objectUrl = URL.createObjectURL(blob);
-      setDisplayUrl(objectUrl);
+      setFallbackDisplayUrl(objectUrl);
     }).catch((error) => {
       console.warn("Falling back to direct keyframe URL.", error);
       if (!cancelled) {
-        setDisplayUrl(imageUrl);
+        setFallbackDisplayUrl(fallbackAssetUrl);
       }
     });
     return () => {
@@ -12584,31 +12599,90 @@ function Companion({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [imageUrl]);
+  }, [fallbackAssetUrl]);
+  reactExports.useEffect(() => {
+    setVideoSourceKind("webm");
+    setSourceVideoIndex(0);
+    setVideoStatus("loading");
+  }, [keyframe.webmRelativePath]);
+  reactExports.useEffect(() => {
+    if (keyframe.motion.playback !== "one_shot" || videoStatus === "ready") {
+      return void 0;
+    }
+    const timer = window.setTimeout(onMotionComplete, keyframe.motion.durationMs);
+    return () => window.clearTimeout(timer);
+  }, [keyframe.motion.durationMs, keyframe.motion.playback, onMotionComplete, videoStatus]);
   reactExports.useEffect(() => {
     onHitTesterChange(null);
     onHitRegionsChange([]);
-    if (imageRef.current?.complete) {
+    if (maskImageRef.current?.complete) {
       buildHitTester();
     }
     return () => {
       onHitTesterChange(null);
       onHitRegionsChange([]);
     };
-  }, [buildHitTester, keyframe.relativePath, onHitRegionsChange, onHitTesterChange]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
-    "img",
-    {
-      ref: imageRef,
-      className: `companion-image companion-image--${state}`,
-      src: displayUrl,
-      width: canvas.width,
-      height: canvas.height,
-      alt: "",
-      draggable: false,
-      onLoad: buildHitTester
+  }, [buildHitTester, fallbackRelativePath, onHitRegionsChange, onHitTesterChange]);
+  const handleVideoCanPlay = reactExports.useCallback((event) => {
+    const video = event.currentTarget;
+    setVideoStatus("ready");
+    video.play().catch((error) => {
+      console.warn("Transparent WebM playback failed; using fallback keyframe.", error);
+      setVideoStatus("failed");
+    });
+  }, []);
+  const handleVideoError = reactExports.useCallback(() => {
+    if (videoSourceKind === "webm" && sourceVideoRelativePaths.length > 0) {
+      setVideoSourceKind("source");
+      setSourceVideoIndex(0);
+      setVideoStatus("loading");
+      return;
     }
-  );
+    if (videoSourceKind === "source" && sourceVideoIndex < sourceVideoRelativePaths.length - 1) {
+      setSourceVideoIndex((currentIndex) => currentIndex + 1);
+      setVideoStatus("loading");
+      return;
+    }
+    setVideoStatus("failed");
+  }, [sourceVideoIndex, sourceVideoRelativePaths.length, videoSourceKind]);
+  const handleVideoEnded = reactExports.useCallback(() => {
+    if (keyframe.motion.playback === "one_shot") {
+      onMotionComplete();
+    }
+  }, [keyframe.motion.playback, onMotionComplete]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref: mediaFrameRef, className: `companion-media-frame companion-media-frame--${state}`, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "video",
+      {
+        className: videoStatus === "ready" ? `companion-media companion-video companion-video--ready` : "companion-media companion-video companion-video--loading",
+        src: videoAssetUrl,
+        width: canvas.width,
+        height: canvas.height,
+        autoPlay: true,
+        loop: keyframe.motion.playback === "loop",
+        muted: true,
+        playsInline: true,
+        preload: "auto",
+        "aria-hidden": "true",
+        onCanPlay: handleVideoCanPlay,
+        onEnded: handleVideoEnded,
+        onError: handleVideoError
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "img",
+      {
+        ref: maskImageRef,
+        className: videoStatus === "ready" ? "companion-mask-image" : `companion-media companion-image companion-media--${state}`,
+        src: fallbackDisplayUrl,
+        width: canvas.width,
+        height: canvas.height,
+        alt: "",
+        draggable: false,
+        onLoad: buildHitTester
+      }
+    )
+  ] });
 }
 const PRIORITY_LABELS = {
   high: "高",
@@ -13061,16 +13135,42 @@ function TaskPanel({
     ] })
   ] });
 }
+const DEFAULT_MOTION = {
+  playback: "loop",
+  durationMs: 4e3
+};
 function keyframeFileName(folder) {
   return `${folder}_01.png`;
 }
+function webmFileName(folder) {
+  return `${folder}_loop.webm`;
+}
+function sourceVideoFiles(folder) {
+  return [
+    `${folder}_jimeng.mp4`,
+    `${folder}_kling.mp4`,
+    `jimeng_${folder}.mp4`,
+    `kling_${folder}.mp4`,
+    `${folder}_source.mp4`
+  ];
+}
+function motionForFolder(folder, statesConfig) {
+  return statesConfig.motions?.[folder] ?? DEFAULT_MOTION;
+}
 function buildKeyframes(companionConfig, statesConfig) {
   const assetRoot = companionConfig.renderer.assetRoot.replace(/\/+$/, "");
+  const keyframeRoot = (companionConfig.renderer.keyframeRoot ?? "keyframes").replace(/^\/+|\/+$/g, "");
+  const webmRoot = (companionConfig.renderer.webmRoot ?? "webm").replace(/^\/+|\/+$/g, "");
   return statesConfig.pa0KeyframeFolders.map((folder) => ({
     folder,
     state: statesConfig.idleVariants.includes(folder) ? "idle" : folder,
     label: folder,
-    relativePath: `${assetRoot}/keyframes/${folder}/${keyframeFileName(folder)}`
+    motion: motionForFolder(folder, statesConfig),
+    webmRelativePath: `${assetRoot}/${webmRoot}/${folder}/${webmFileName(folder)}`,
+    sourceVideoRelativePaths: sourceVideoFiles(folder).map((file) => `${assetRoot}/states/${folder}/source/${file}`),
+    sourceVideoRelativePath: `${assetRoot}/states/${folder}/source/${folder}_jimeng.mp4`,
+    fallbackRelativePath: `${assetRoot}/${keyframeRoot}/${folder}/${keyframeFileName(folder)}`,
+    relativePath: `${assetRoot}/${keyframeRoot}/${folder}/${keyframeFileName(folder)}`
   }));
 }
 const RENDER_STATES = [
@@ -13112,6 +13212,24 @@ const DEFAULT_WINDOW_CONTROLS = {
   mousePassthrough: true
 };
 const DEFAULT_SNOOZE_MINUTES = 10;
+const DEFAULT_IDLE_MOTION = {
+  enabled: true,
+  minDelayMs: 3e4,
+  maxDelayMs: 6e4,
+  variants: ["idle_yawn", "idle_hair", "idle_reading"],
+  duckSitVariants: ["duck_sit_head_hair", "duck_sit_finger_lip", "duck_sit_stretch"],
+  standToDuckSitProbability: 0.35,
+  duckSitToStandProbability: 0.3
+};
+const DUCK_SIT_IDLE = "duck_sit_idle";
+const STAND_TO_DUCK_SIT = "stand_to_duck_sit";
+const DUCK_SIT_TO_STAND = "duck_sit_to_stand";
+const DUCK_SIT_STRETCH = "duck_sit_stretch";
+const DUCK_SIT_TO_SLEEP = "duck_sit_to_sleep";
+const WAKE_FROM_SLEEP_TRANSITION = "sleep_to_stand";
+const SLEEP_ENTRY_FROM_STANDING = ["idle_yawn", STAND_TO_DUCK_SIT, DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1e3;
 const EMPTY_TASK_SNAPSHOT = {
   today: [],
   currentCodex: null,
@@ -13166,6 +13284,46 @@ function codexBubbleMessage(codexState, state) {
 }
 function statePriority(state, statesConfig) {
   return statesConfig.priorities[state] ?? 999;
+}
+function randomDelay(minDelayMs, maxDelayMs) {
+  const min = Math.max(0, minDelayMs);
+  const max = Math.max(min, maxDelayMs);
+  return Math.round(min + Math.random() * (max - min));
+}
+function weightedRandomKeyframe(keyframes) {
+  if (keyframes.length === 0) {
+    return null;
+  }
+  const totalWeight = keyframes.reduce((sum, keyframe) => sum + Math.max(0, keyframe.motion.idleWeight ?? 1), 0);
+  if (totalWeight <= 0) {
+    return keyframes[Math.floor(Math.random() * keyframes.length)] ?? null;
+  }
+  let cursor = Math.random() * totalWeight;
+  for (const keyframe of keyframes) {
+    cursor -= Math.max(0, keyframe.motion.idleWeight ?? 1);
+    if (cursor <= 0) {
+      return keyframe;
+    }
+  }
+  return keyframes[keyframes.length - 1] ?? null;
+}
+function hasFolders(catalog, folders) {
+  return folders.every((folder) => catalog.byFolder.has(folder));
+}
+function availableKeyframes(catalog, folders) {
+  return folders.map((folder) => catalog.byFolder.get(folder)).filter((keyframe) => Boolean(keyframe));
+}
+function clampProbability(value, fallback) {
+  if (value === void 0 || Number.isNaN(value)) {
+    return fallback;
+  }
+  return Math.min(Math.max(value, 0), 1);
+}
+function renderedStateForMotion(folder, desiredState) {
+  if (!folder) {
+    return desiredState;
+  }
+  return folder === DUCK_SIT_TO_SLEEP || folder === WAKE_FROM_SLEEP_TRANSITION ? "sleep" : "idle";
 }
 function moduleFromSearch() {
   const module = new URLSearchParams(window.location.search).get("module");
@@ -13228,6 +13386,194 @@ function useRuntimeState() {
   reactExports.useEffect(() => window.companionAPI.onTasksUpdated(setTasks), []);
   return { codexState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
 }
+function PetRenderer({
+  companionConfig,
+  statesConfig,
+  manualSelection,
+  codexState,
+  reminderState,
+  taskNotification,
+  keyframes,
+  catalog,
+  onHitRegionsChange
+}) {
+  const [idleMotionFolder, setIdleMotionFolder] = reactExports.useState(null);
+  const [idlePosture, setIdlePosture] = reactExports.useState("standing");
+  const [autoSleep, setAutoSleep] = reactExports.useState(false);
+  const idleMotionTimerRef = reactExports.useRef(null);
+  const motionQueueRef = reactExports.useRef([]);
+  const previousDesiredStateRef = reactExports.useRef(null);
+  const clearIdleMotionTimer = reactExports.useCallback(() => {
+    if (idleMotionTimerRef.current !== null) {
+      window.clearTimeout(idleMotionTimerRef.current);
+      idleMotionTimerRef.current = null;
+    }
+  }, []);
+  const startMotionSequence = reactExports.useCallback(
+    (folders) => {
+      if (folders.length === 0 || !hasFolders(catalog, folders)) {
+        return false;
+      }
+      clearIdleMotionTimer();
+      motionQueueRef.current = folders.slice(1);
+      setIdleMotionFolder(folders[0]);
+      return true;
+    },
+    [catalog, clearIdleMotionTimer]
+  );
+  const clearMotionSequence = reactExports.useCallback(() => {
+    motionQueueRef.current = [];
+    setIdleMotionFolder(null);
+  }, []);
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const codexOverride = codexState && codexState.state !== "idle" ? codexState : null;
+  const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
+  const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
+  const runtimeCandidates = [];
+  if (codexOverride) {
+    runtimeCandidates.push({ source: "codex", state: codexOverride.state });
+  }
+  if (reminderOverride) {
+    runtimeCandidates.push({ source: "reminder", state: reminderOverride.state });
+  }
+  if (taskOverride) {
+    runtimeCandidates.push({ source: "task", state: taskOverride.state });
+  }
+  const runtimeOverride = runtimeCandidates.sort(
+    (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
+  )[0] ?? null;
+  const canAutoSleep = !runtimeOverride && selection.state === "idle" && !selection.variant;
+  reactExports.useEffect(() => {
+    if (!canAutoSleep) {
+      setAutoSleep(false);
+      return void 0;
+    }
+    const timer = window.setTimeout(() => {
+      setAutoSleep(true);
+    }, AUTO_SLEEP_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [canAutoSleep, selection.state, selection.variant]);
+  const desiredState = runtimeOverride?.state ?? (autoSleep ? "sleep" : selection.state);
+  const renderedState = renderedStateForMotion(idleMotionFolder, desiredState);
+  const canPlayIdleMotion = desiredState === "idle" && !runtimeOverride && selection.state === "idle" && !selection.variant;
+  const renderedVariant = !idleMotionFolder && renderedState === "idle" ? selection.variant : null;
+  const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : void 0;
+  const postureIdleKeyframe = !idleMotionFolder && renderedState === "idle" && !renderedVariant && idlePosture === "duck_sit" ? catalog.byFolder.get(DUCK_SIT_IDLE) : void 0;
+  const activeKeyframe = activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
+  const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
+  reactExports.useEffect(() => {
+    const previousDesiredState = previousDesiredStateRef.current;
+    if (desiredState === "sleep") {
+      if (previousDesiredState !== "sleep") {
+        const sleepEntrySequence = idlePosture === "duck_sit" ? SLEEP_ENTRY_FROM_DUCK_SIT : SLEEP_ENTRY_FROM_STANDING;
+        startMotionSequence(sleepEntrySequence);
+      }
+      previousDesiredStateRef.current = desiredState;
+      return;
+    }
+    if (previousDesiredState === "sleep") {
+      if (startMotionSequence([WAKE_FROM_SLEEP_TRANSITION])) {
+        setIdlePosture("standing");
+      }
+    }
+    previousDesiredStateRef.current = desiredState;
+  }, [desiredState, idleMotionFolder, idlePosture, startMotionSequence]);
+  reactExports.useEffect(() => {
+    if (!canPlayIdleMotion) {
+      clearIdleMotionTimer();
+      if (desiredState !== "sleep" && idleMotionFolder !== WAKE_FROM_SLEEP_TRANSITION) {
+        clearMotionSequence();
+      }
+      return void 0;
+    }
+    if (idleMotionFolder) {
+      return void 0;
+    }
+    const idleMotionConfig = statesConfig.idleMotion ?? DEFAULT_IDLE_MOTION;
+    if (!idleMotionConfig.enabled) {
+      return void 0;
+    }
+    const standingIdleKeyframes = availableKeyframes(catalog, idleMotionConfig.variants);
+    const duckSitIdleKeyframes = availableKeyframes(
+      catalog,
+      idleMotionConfig.duckSitVariants ?? DEFAULT_IDLE_MOTION.duckSitVariants
+    );
+    if (standingIdleKeyframes.length === 0 && duckSitIdleKeyframes.length === 0) {
+      return void 0;
+    }
+    idleMotionTimerRef.current = window.setTimeout(() => {
+      if (idlePosture === "standing" && catalog.byFolder.has(STAND_TO_DUCK_SIT) && Math.random() < clampProbability(idleMotionConfig.standToDuckSitProbability, 0.35)) {
+        startMotionSequence([STAND_TO_DUCK_SIT]);
+        return;
+      }
+      if (idlePosture === "duck_sit" && catalog.byFolder.has(DUCK_SIT_TO_STAND) && Math.random() < clampProbability(idleMotionConfig.duckSitToStandProbability, 0.3)) {
+        startMotionSequence([DUCK_SIT_TO_STAND]);
+        return;
+      }
+      const pool = idlePosture === "duck_sit" ? duckSitIdleKeyframes : standingIdleKeyframes;
+      const nextMotion = weightedRandomKeyframe(pool);
+      if (nextMotion) {
+        startMotionSequence([nextMotion.folder]);
+      }
+    }, randomDelay(idleMotionConfig.minDelayMs, idleMotionConfig.maxDelayMs));
+    return clearIdleMotionTimer;
+  }, [
+    canPlayIdleMotion,
+    catalog,
+    clearIdleMotionTimer,
+    clearMotionSequence,
+    desiredState,
+    idleMotionFolder,
+    idlePosture,
+    startMotionSequence,
+    statesConfig.idleMotion
+  ]);
+  reactExports.useEffect(() => {
+    if (!idleMotionFolder || !activeKeyframe || activeKeyframe.motion.playback !== "loop") {
+      return void 0;
+    }
+    const timer = window.setTimeout(() => {
+      setIdleMotionFolder(null);
+    }, activeMotionDurationMs);
+    return () => window.clearTimeout(timer);
+  }, [activeKeyframe, activeMotionDurationMs, idleMotionFolder]);
+  const handleMotionComplete = reactExports.useCallback(() => {
+    const completedFolder = idleMotionFolder;
+    if (!completedFolder) {
+      return;
+    }
+    if (completedFolder === STAND_TO_DUCK_SIT) {
+      setIdlePosture("duck_sit");
+    } else if (completedFolder === DUCK_SIT_TO_STAND || completedFolder === WAKE_FROM_SLEEP_TRANSITION) {
+      setIdlePosture("standing");
+    }
+    const nextFolder = motionQueueRef.current.shift();
+    if (nextFolder) {
+      setIdleMotionFolder(nextFolder);
+      return;
+    }
+    setIdleMotionFolder(null);
+  }, [idleMotionFolder]);
+  if (!activeKeyframe) {
+    return null;
+  }
+  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : codexBubbleMessage(runtimeOverride?.source === "codex" ? codexOverride : null, renderedState);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "companion-shell", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "companion-stage", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+      Companion,
+      {
+        keyframe: activeKeyframe,
+        canvas: companionConfig.renderer.keyframeCanvas,
+        state: renderedState,
+        onHitTesterChange: () => void 0,
+        onHitRegionsChange,
+        onMotionComplete: handleMotionComplete
+      },
+      `${renderedState}:${activeKeyframe.folder}`
+    ) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { state: renderedState, message: bubbleMessage, actions: null })
+  ] });
+}
 function PetApp() {
   const [companionConfig, setCompanionConfig] = reactExports.useState(null);
   const [statesConfig, setStatesConfig] = reactExports.useState(null);
@@ -13262,44 +13608,20 @@ function PetApp() {
   if (!companionConfig || !statesConfig || !catalog || catalog.states.length === 0) {
     return null;
   }
-  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
-  const codexOverride = codexState && codexState.state !== "idle" ? codexState : null;
-  const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
-  const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
-  const runtimeCandidates = [];
-  if (codexOverride) {
-    runtimeCandidates.push({ source: "codex", state: codexOverride.state });
-  }
-  if (reminderOverride) {
-    runtimeCandidates.push({ source: "reminder", state: reminderOverride.state });
-  }
-  if (taskOverride) {
-    runtimeCandidates.push({ source: "task", state: taskOverride.state });
-  }
-  const runtimeOverride = runtimeCandidates.sort(
-    (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
-  )[0] ?? null;
-  const renderedState = runtimeOverride?.state ?? selection.state;
-  const renderedVariant = runtimeOverride ? null : selection.variant;
-  const activeKeyframe = (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
-  if (!activeKeyframe) {
-    return null;
-  }
-  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : codexBubbleMessage(runtimeOverride?.source === "codex" ? codexOverride : null, renderedState);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "companion-shell", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "companion-stage", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Companion,
-      {
-        keyframe: activeKeyframe,
-        canvas: companionConfig.renderer.keyframeCanvas,
-        state: renderedState,
-        onHitTesterChange: () => void 0,
-        onHitRegionsChange: publishHitRegions
-      },
-      `${renderedState}:${activeKeyframe.folder}`
-    ) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { state: renderedState, message: bubbleMessage, actions: null })
-  ] });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    PetRenderer,
+    {
+      companionConfig,
+      statesConfig,
+      manualSelection,
+      codexState,
+      reminderState,
+      taskNotification,
+      keyframes,
+      catalog,
+      onHitRegionsChange: publishHitRegions
+    }
+  );
 }
 function SettingsModule({
   shortcuts,

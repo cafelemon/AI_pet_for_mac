@@ -10,19 +10,39 @@ This project keeps the existing standing assets under their current runtime name
 | `standing_yawn` | `idle_yawn` |
 | `sleep` | `sleep` |
 
-Use these exact paths for the new MP4 files:
+Current source files and conversion settings:
 
-| Priority | State | Expected MP4 path | Default matte |
-|---|---|---|---|
-| 1 | `duck_sit_idle` | `assets/states/duck_sit_idle/source/duck_sit_idle_source.mp4` | `neutral_floor` |
-| 1 | `stand_to_duck_sit` | `assets/states/stand_to_duck_sit/source/stand_to_duck_sit_source.mp4` | `neutral_floor` |
-| 1 | `duck_sit_to_stand` | `assets/states/duck_sit_to_stand/source/duck_sit_to_stand_source.mp4` | `neutral_floor` |
-| 1 | `duck_sit_to_sleep` | `assets/states/duck_sit_to_sleep/source/duck_sit_to_sleep_source.mp4` | `white` |
-| 2 | `duck_sit_head_hair` | `assets/states/duck_sit_head_hair/source/duck_sit_head_hair_source.mp4` | `neutral_floor` |
-| 2 | `duck_sit_finger_lip` | `assets/states/duck_sit_finger_lip/source/duck_sit_finger_lip_source.mp4` | `neutral_floor` |
-| 2 | `duck_sit_stretch` | `assets/states/duck_sit_stretch/source/duck_sit_stretch_source.mp4` | `neutral_floor` |
+| Priority | State | MP4 path | Matte | Crop |
+|---|---|---|---|---|
+| 1 | `sleep` | `assets/states/sleep/source/kling_sleep.mp4` | `sleep_props` | `none` |
+| 1 | `duck_sit_idle` | `assets/states/duck_sit_idle/source/kling_duck_sit_idle.mp4` | `neutral_floor` | `none` |
+| 1 | `stand_to_duck_sit` | `assets/states/stand_to_duck_sit/source/kling_stand_to_duck_sit.mp4` | `neutral_floor` | `none` |
+| 1 | `duck_sit_to_stand` | `assets/states/duck_sit_to_stand/source/kling_duck_sit_to_stand.mp4` | `neutral_floor` | `none` |
+| 1 | `duck_sit_to_sleep` | `assets/states/duck_sit_to_sleep/source/kling_duck_sit_to_sleep.mp4` | `sleep_props` | `duck_sit_to_sleep` |
+| 1 | `sleep_to_stand` | `assets/states/sleep_to_stand/source/kling_sleep_to_stand.mp4` | `sleep_props` | `sleep_to_stand` |
+| 2 | `duck_sit_head_hair` | `assets/states/duck_sit_head_hair/source/duck_sit_head_hai r_jimeng.mp4` | `neutral_floor` | `none` |
+| 2 | `duck_sit_finger_lip` | `assets/states/duck_sit_finger_lip/source/kling_duck_sit_finger_lip.mp4` | `neutral_floor` | `none` |
+| 2 | `duck_sit_stretch` | `assets/states/duck_sit_stretch/source/kling_duck_sit_stretch.mp4` | `neutral_floor` | `none` |
 
-After an MP4 arrives:
+Runtime wake-up rule:
+
+```text
+sleep
+  ↓
+sleep_to_stand
+  ↓
+idle / standing_idle
+```
+
+When sleep ends for any reason, the renderer must play `sleep_to_stand` before showing any standing, duck-sit, task, or reminder state.
+
+Sleep video QA rule:
+
+- `sleep`, `duck_sit_to_sleep`, and `sleep_to_stand` use `sleep_props` to preserve the cup/soft cushion, shoes, and character.
+- `duck_sit_to_sleep` and `sleep_to_stand` are cropped before matte generation to remove 16:9 black side bars.
+- These states must be checked on magenta, black, and gray backgrounds before delivery.
+
+After an MP4 changes:
 
 ```bash
 python3 scripts/pb2_video_pipeline.py check --state <state>
@@ -35,5 +55,7 @@ QA outputs are written to:
 ```text
 docs/pb2/qa/<state>_contact.png
 docs/pb2/qa/magenta/<state>_magenta.png
+docs/pb2/qa/black/<state>_black.png
+docs/pb2/qa/gray/<state>_gray.png
 docs/pb2/qa/alpha/<state>_alpha.png
 ```

@@ -1,15 +1,27 @@
 .DS_Store
+
+# Local virtual environments
+.venv/
+venv/
+
+# Frontend dependencies and build caches
 node_modules/
 dist/
 build/
 .vite/
+
+# Python caches and local databases
 __pycache__/
 *.pyc
 *.sqlite
 *.db
+
+# Runtime data
 data/logs/*
 !data/logs/.gitkeep
 data/runtime_state/*
 !data/runtime_state/.gitkeep
+
+# Source videos and per-state matting workdirs
 assets/states/*/source/*
 !assets/states/*/source/.gitkeep

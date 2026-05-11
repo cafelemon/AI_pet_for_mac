@@ -47,6 +47,12 @@ data/config/motion_sources.config.json
 
 The source videos should be 3-5 seconds, pure white background, fixed camera, full body visible, no shadow, no subtitles, and preferably no watermark. If a watermark is unavoidable, use a per-provider mask preset instead of applying a global Jimeng mask.
 
+For prop-heavy states such as `coding`, completeness comes first and transparency friendliness comes second:
+
+- keep the character, desk, chair, and laptop fully visible in every frame
+- avoid pure-white desk or chair surfaces that blend into the white background; prefer light gray, beige-gray, or pale wood tones
+- reject any source where chair legs, desk legs, shoes, or laptop corners disappear into the background before conversion
+
 ## Conversion
 
 Check source video presence:
@@ -83,10 +89,14 @@ The conversion script writes:
 assets/webm/<state>/<state>_loop.webm
 docs/pb2/qa/<state>_contact.png
 docs/pb2/qa/magenta/<state>_magenta.png
+docs/pb2/qa/black/<state>_black.png
+docs/pb2/qa/cyan/<state>_cyan.png
 docs/pb2/qa/alpha/<state>_alpha.png
 ```
 
 The default conversion pipeline only removes white or near-white pixels that are connected to the frame edge. This preserves internal white clothing, hair highlights, cup edges, and VFX. For sources with a gray studio floor, use the configured `neutral_floor` matte preset. If a source has a stronger white fringe, tune `--background-similarity`.
+
+For `coding`, acceptance requires the magenta, black, and cyan QA sheets to keep the full chair, full desk legs, intact laptop silhouette, and an uncut body outline. If any of those are incomplete, fix the source or tighten the `coding` cleanup rules before accepting the asset.
 
 ## Validation
 

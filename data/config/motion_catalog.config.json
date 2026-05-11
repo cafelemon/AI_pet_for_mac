@@ -97,7 +97,7 @@
       "stage": "Priority Idle V1",
       "playback": "loop",
       "description": "鸭子坐主待机姿态：稳定鸭子坐、轻微呼吸和眨眼",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "duck_sit_head_hair",
@@ -106,7 +106,7 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "鸭子坐歪头撩发：保持坐姿，轻轻歪头并整理发梢",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "duck_sit_finger_lip",
@@ -115,7 +115,7 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "鸭子坐含指抿唇：保持坐姿，手靠近嘴边做小表情",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "duck_sit_stretch",
@@ -124,7 +124,7 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "鸭子坐伸懒腰：从鸭子坐轻轻舒展身体后回到坐姿",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "stand_to_duck_sit",
@@ -133,7 +133,7 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "站立到鸭子坐：自然站立过渡到稳定鸭子坐",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "duck_sit_to_stand",
@@ -142,7 +142,7 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "鸭子坐到站立：从稳定坐姿自然站回站立",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "duck_sit_to_sleep",
@@ -151,7 +151,16 @@
       "stage": "Priority Idle V1",
       "playback": "one_shot",
       "description": "鸭子坐到睡眠：从鸭子坐自然进入小杯子或软垫睡眠姿态",
-      "runtime": false
+      "runtime": true
+    },
+    {
+      "id": "sleep_to_stand",
+      "label": "sleep to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "睡眠到站立：从小杯子或软垫睡醒后自然站回站立待机姿态",
+      "runtime": true
     },
     {
       "id": "bored",

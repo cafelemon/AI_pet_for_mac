@@ -23,12 +23,19 @@
       "idle_yawn",
       "idle_hair",
       "idle_reading"
-    ]
+    ],
+    "duckSitVariants": [
+      "duck_sit_head_hair",
+      "duck_sit_finger_lip",
+      "duck_sit_stretch"
+    ],
+    "standToDuckSitProbability": 0.35,
+    "duckSitToStandProbability": 0.3
   },
   "motions": {
     "idle": {
       "playback": "loop",
-      "durationMs": 5000
+      "durationMs": 5040
     },
     "coding": {
       "playback": "loop",
@@ -40,33 +47,68 @@
     },
     "success": {
       "playback": "one_shot",
-      "durationMs": 2400
+      "durationMs": 6040
     },
     "error": {
       "playback": "one_shot",
-      "durationMs": 5000
+      "durationMs": 5040
     },
     "reminder": {
       "playback": "one_shot",
-      "durationMs": 5000
+      "durationMs": 5040
     },
     "sleep": {
       "playback": "loop",
-      "durationMs": 6000
+      "durationMs": 3040
+    },
+    "sleep_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 15750
+    },
+    "duck_sit_idle": {
+      "playback": "loop",
+      "durationMs": 4040
+    },
+    "duck_sit_head_hair": {
+      "playback": "one_shot",
+      "durationMs": 10040,
+      "idleWeight": 1
+    },
+    "duck_sit_finger_lip": {
+      "playback": "one_shot",
+      "durationMs": 4040,
+      "idleWeight": 1
+    },
+    "duck_sit_stretch": {
+      "playback": "one_shot",
+      "durationMs": 6040,
+      "idleWeight": 1
+    },
+    "stand_to_duck_sit": {
+      "playback": "one_shot",
+      "durationMs": 7040
+    },
+    "duck_sit_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5040
+    },
+    "duck_sit_to_sleep": {
+      "playback": "one_shot",
+      "durationMs": 12560
     },
     "idle_reading": {
       "playback": "loop",
-      "durationMs": 5200,
+      "durationMs": 5040,
       "idleWeight": 1
     },
     "idle_yawn": {
       "playback": "one_shot",
-      "durationMs": 3000,
+      "durationMs": 5040,
       "idleWeight": 1
     },
     "idle_hair": {
       "playback": "one_shot",
-      "durationMs": 2600,
+      "durationMs": 5040,
       "idleWeight": 1
     }
   },
@@ -78,6 +120,14 @@
     "error",
     "reminder",
     "sleep",
+    "duck_sit_idle",
+    "duck_sit_head_hair",
+    "duck_sit_finger_lip",
+    "duck_sit_stretch",
+    "stand_to_duck_sit",
+    "duck_sit_to_stand",
+    "duck_sit_to_sleep",
+    "sleep_to_stand",
     "idle_reading",
     "idle_yawn",
     "idle_hair"

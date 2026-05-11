@@ -18,8 +18,9 @@
     },
     "sleep": {
       "provider": "kling",
-      "sourceFile": "sleep_jimeng.mp4",
-      "maskPreset": "kling_corner"
+      "sourceFile": "kling_sleep.mp4",
+      "maskPreset": "none",
+      "mattePreset": "sleep_props"
     },
     "success": {
       "provider": "kling",
@@ -33,7 +34,7 @@
     },
     "thinking": {
       "provider": "kling",
-      "sourceFile": "thinking_jimeng.mp4",
+      "sourceFile": "kling_thinking.mp4",
       "maskPreset": "kling_corner"
     },
     "reminder": {
@@ -59,46 +60,54 @@
       "mattePreset": "neutral_floor"
     },
     "duck_sit_idle": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_idle_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_duck_sit_idle.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "duck_sit_head_hair": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_head_hair_source.mp4",
+      "provider": "jimeng",
+      "sourceFile": "duck_sit_head_hai r_jimeng.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "duck_sit_finger_lip": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_finger_lip_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_duck_sit_finger_lip.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "duck_sit_stretch": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_stretch_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_duck_sit_stretch.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "stand_to_duck_sit": {
-      "provider": "unknown",
-      "sourceFile": "stand_to_duck_sit_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_stand_to_duck_sit.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "duck_sit_to_stand": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_to_stand_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_duck_sit_to_stand.mp4",
       "maskPreset": "none",
       "mattePreset": "neutral_floor"
     },
     "duck_sit_to_sleep": {
-      "provider": "unknown",
-      "sourceFile": "duck_sit_to_sleep_source.mp4",
+      "provider": "kling",
+      "sourceFile": "kling_duck_sit_to_sleep.mp4",
       "maskPreset": "none",
-      "mattePreset": "white"
+      "mattePreset": "sleep_props",
+      "cropPreset": "duck_sit_to_sleep"
+    },
+    "sleep_to_stand": {
+      "provider": "kling",
+      "sourceFile": "kling_sleep_to_stand.mp4",
+      "maskPreset": "none",
+      "mattePreset": "sleep_props",
+      "cropPreset": "sleep_to_stand"
     }
   }
 }

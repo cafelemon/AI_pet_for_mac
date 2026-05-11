@@ -1338,7 +1338,7 @@ function registerWindowControlHandlers() {
   });
 }
 function isManualRenderSelection(value) {
-  return isRecord(value) && typeof value.state === "string" && COMPANION_STATES.has(value.state) && (value.variant === null || typeof value.variant === "string");
+  return isRecord(value) && typeof value.state === "string" && COMPANION_STATES.has(value.state) && (value.variant === null || typeof value.variant === "string") && (value.folder === void 0 || value.folder === null || typeof value.folder === "string") && (value.replayId === void 0 || typeof value.replayId === "number");
 }
 function publishManualRenderSelection() {
   sendToRendererWindows(MANUAL_RENDER_SELECTION_CHANNEL, manualRenderSelection);
@@ -1351,7 +1351,9 @@ function registerManualRenderHandlers() {
     }
     manualRenderSelection = {
       state: selection.state,
-      variant: selection.variant
+      variant: selection.variant,
+      folder: selection.folder ?? selection.variant ?? null,
+      replayId: selection.replayId
     };
     publishManualRenderSelection();
     return manualRenderSelection;

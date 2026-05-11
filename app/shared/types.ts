@@ -42,6 +42,9 @@ export interface IdleMotionConfig {
   minDelayMs: number;
   maxDelayMs: number;
   variants: string[];
+  duckSitVariants?: string[];
+  standToDuckSitProbability?: number;
+  duckSitToStandProbability?: number;
 }
 
 export interface PluginsConfig {
@@ -281,6 +284,8 @@ export interface ShortcutBinding {
 export interface ManualRenderSelection {
   state: CompanionState;
   variant: string | null;
+  folder?: string | null;
+  replayId?: number;
 }
 
 export interface MouseHitTestPoint {

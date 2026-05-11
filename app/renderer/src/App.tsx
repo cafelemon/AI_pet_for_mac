@@ -7,6 +7,7 @@ import { ReminderPanel } from '../components/ReminderPanel';
 import { StatusPanel } from '../components/StatusPanel';
 import { TaskPanel } from '../components/TaskPanel';
 import { buildKeyframes } from '../adapters/SequenceRenderer';
+import type { StatusActionGroup } from '../components/StatusPanel';
 import type {
   CodexRenderState,
   CompanionConfig,
@@ -71,8 +72,42 @@ const DEFAULT_IDLE_MOTION = {
   enabled: true,
   minDelayMs: 30000,
   maxDelayMs: 60000,
-  variants: ['idle_yawn', 'idle_hair', 'idle_reading']
+  variants: ['idle_yawn', 'idle_hair', 'idle_reading'],
+  duckSitVariants: ['duck_sit_head_hair', 'duck_sit_finger_lip', 'duck_sit_stretch'],
+  standToDuckSitProbability: 0.35,
+  duckSitToStandProbability: 0.3
 };
+const DUCK_SIT_IDLE = 'duck_sit_idle';
+const STAND_TO_DUCK_SIT = 'stand_to_duck_sit';
+const DUCK_SIT_TO_STAND = 'duck_sit_to_stand';
+const DUCK_SIT_STRETCH = 'duck_sit_stretch';
+const DUCK_SIT_TO_SLEEP = 'duck_sit_to_sleep';
+const WAKE_FROM_SLEEP_TRANSITION = 'sleep_to_stand';
+const SLEEP_ENTRY_FROM_STANDING = ['idle_yawn', STAND_TO_DUCK_SIT, DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1000;
+const STATUS_ACTION_GROUPS: Array<{ label: string; folders: string[] }> = [
+  {
+    label: '核心状态',
+    folders: ['idle', 'coding', 'thinking', 'success', 'error', 'reminder']
+  },
+  {
+    label: '站立小动作',
+    folders: ['idle_yawn', 'idle_hair', 'idle_reading']
+  },
+  {
+    label: '鸭子坐',
+    folders: [DUCK_SIT_IDLE, 'duck_sit_head_hair', 'duck_sit_finger_lip', DUCK_SIT_STRETCH]
+  },
+  {
+    label: '姿态衔接',
+    folders: [STAND_TO_DUCK_SIT, DUCK_SIT_TO_STAND]
+  },
+  {
+    label: '睡眠相关',
+    folders: ['sleep', DUCK_SIT_TO_SLEEP, WAKE_FROM_SLEEP_TRANSITION]
+  }
+];
 const EMPTY_TASK_SNAPSHOT: TaskCenterSnapshot = {
   today: [],
   currentCodex: null,
@@ -85,9 +120,12 @@ const MODULE_LABELS: Record<ControlCenterModule, string> = {
   settings: '设置'
 };
 
+type IdlePosture = 'standing' | 'duck_sit';
+
 interface CompanionCatalog {
   states: CompanionState[];
   idleVariants: KeyframeDescriptor[];
+  actionGroups: StatusActionGroup[];
   byFolder: Map<string, KeyframeDescriptor>;
   byState: Map<CompanionState, KeyframeDescriptor>;
 }
@@ -98,6 +136,14 @@ function isCompanionState(state: string): state is CompanionState {
 
 function keyframeFolderForState(state: CompanionState): string {
   return STATE_KEYFRAME_FOLDERS[state] ?? state;
+}
+
+function stateForActionFolder(folder: string): CompanionState {
+  if (isCompanionState(folder)) {
+    return folder;
+  }
+
+  return folder === DUCK_SIT_TO_SLEEP || folder === WAKE_FROM_SLEEP_TRANSITION ? 'sleep' : 'idle';
 }
 
 function buildCompanionCatalog(keyframes: KeyframeDescriptor[], statesConfig: StatesConfig): CompanionCatalog {
@@ -119,6 +165,12 @@ function buildCompanionCatalog(keyframes: KeyframeDescriptor[], statesConfig: St
     idleVariants: statesConfig.idleVariants
       .map((variant) => byFolder.get(variant))
       .filter((variant): variant is KeyframeDescriptor => Boolean(variant)),
+    actionGroups: STATUS_ACTION_GROUPS.map((group) => ({
+      label: group.label,
+      actions: group.folders
+        .map((folder) => byFolder.get(folder))
+        .filter((action): action is KeyframeDescriptor => Boolean(action))
+    })).filter((group) => group.actions.length > 0),
     byFolder,
     byState
   };
@@ -126,10 +178,11 @@ function buildCompanionCatalog(keyframes: KeyframeDescriptor[], statesConfig: St
 
 function defaultCatalogSelection(defaultState: string, catalog: CompanionCatalog): ManualRenderSelection {
   if (isCompanionState(defaultState) && catalog.byState.has(defaultState)) {
-    return { state: defaultState, variant: null };
+    return { state: defaultState, variant: null, folder: keyframeFolderForState(defaultState), replayId: 0 };
   }
 
-  return { state: catalog.byState.has('idle') ? 'idle' : (catalog.states[0] ?? 'idle'), variant: null };
+  const state = catalog.byState.has('idle') ? 'idle' : (catalog.states[0] ?? 'idle');
+  return { state, variant: null, folder: keyframeFolderForState(state), replayId: 0 };
 }
 
 function clampRendererScale(scale: number, companionConfig: CompanionConfig): number {
@@ -174,6 +227,32 @@ function weightedRandomKeyframe(keyframes: KeyframeDescriptor[]): KeyframeDescri
   }
 
   return keyframes[keyframes.length - 1] ?? null;
+}
+
+function hasFolders(catalog: CompanionCatalog, folders: string[]): boolean {
+  return folders.every((folder) => catalog.byFolder.has(folder));
+}
+
+function availableKeyframes(catalog: CompanionCatalog, folders: string[]): KeyframeDescriptor[] {
+  return folders
+    .map((folder) => catalog.byFolder.get(folder))
+    .filter((keyframe): keyframe is KeyframeDescriptor => Boolean(keyframe));
+}
+
+function clampProbability(value: number | undefined, fallback: number): number {
+  if (value === undefined || Number.isNaN(value)) {
+    return fallback;
+  }
+
+  return Math.min(Math.max(value, 0), 1);
+}
+
+function renderedStateForMotion(folder: string | null, desiredState: CompanionState): CompanionState {
+  if (!folder) {
+    return desiredState;
+  }
+
+  return folder === DUCK_SIT_TO_SLEEP || folder === WAKE_FROM_SLEEP_TRANSITION ? 'sleep' : 'idle';
 }
 
 function moduleFromSearch(): ControlCenterModule {
@@ -285,15 +364,35 @@ function PetRenderer({
   onHitRegionsChange: (regions: MouseHitRegion[]) => void;
 }): ReactElement | null {
   const [idleMotionFolder, setIdleMotionFolder] = useState<string | null>(null);
+  const [idlePosture, setIdlePosture] = useState<IdlePosture>('standing');
+  const [autoSleep, setAutoSleep] = useState(false);
   const idleMotionTimerRef = useRef<number | null>(null);
+  const motionQueueRef = useRef<string[]>([]);
+  const previousDesiredStateRef = useRef<CompanionState | null>(null);
   const clearIdleMotionTimer = useCallback((): void => {
     if (idleMotionTimerRef.current !== null) {
       window.clearTimeout(idleMotionTimerRef.current);
       idleMotionTimerRef.current = null;
     }
   }, []);
+  const startMotionSequence = useCallback(
+    (folders: string[]): boolean => {
+      if (folders.length === 0 || !hasFolders(catalog, folders)) {
+        return false;
+      }
 
-  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+      clearIdleMotionTimer();
+      motionQueueRef.current = folders.slice(1);
+      setIdleMotionFolder(folders[0]);
+      return true;
+    },
+    [catalog, clearIdleMotionTimer]
+  );
+  const clearMotionSequence = useCallback((): void => {
+    motionQueueRef.current = [];
+    setIdleMotionFolder(null);
+  }, []);
+
   const codexOverride = codexState && codexState.state !== 'idle' ? codexState : null;
   const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
   const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
@@ -313,20 +412,75 @@ function PetRenderer({
     runtimeCandidates.sort(
       (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
     )[0] ?? null;
-  const renderedState = runtimeOverride?.state ?? selection.state;
-  const canPlayIdleMotion = !runtimeOverride && selection.state === 'idle' && !selection.variant;
-  const renderedVariant = runtimeOverride ? null : idleMotionFolder ?? selection.variant;
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
+  const exactManualFolder =
+    !runtimeOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
+  const canAutoSleep = !runtimeOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
+
+  useEffect(() => {
+    if (!canAutoSleep) {
+      setAutoSleep(false);
+      return undefined;
+    }
+
+    const timer = window.setTimeout(() => {
+      setAutoSleep(true);
+    }, AUTO_SLEEP_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [canAutoSleep, selection.state, selection.variant]);
+
+  const desiredState = runtimeOverride?.state ?? (autoSleep ? 'sleep' : selection.state);
+  const renderedState = exactManualFolder
+    ? renderedStateForMotion(exactManualFolder, desiredState)
+    : renderedStateForMotion(idleMotionFolder, desiredState);
+  const canPlayIdleMotion =
+    desiredState === 'idle' && !runtimeOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
+  const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === 'idle' ? selection.variant : null;
+  const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : undefined;
+  const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : undefined;
+  const postureIdleKeyframe =
+    !idleMotionFolder && renderedState === 'idle' && !renderedVariant && idlePosture === 'duck_sit'
+      ? catalog.byFolder.get(DUCK_SIT_IDLE)
+      : undefined;
   const activeKeyframe =
+    manualActionKeyframe ??
+    activeMotionKeyframe ??
     (renderedState === 'idle' && renderedVariant ? catalog.byFolder.get(renderedVariant) : undefined) ??
+    postureIdleKeyframe ??
     catalog.byState.get(renderedState) ??
     catalog.byState.get('idle') ??
     keyframes[0];
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
 
   useEffect(() => {
+    const previousDesiredState = previousDesiredStateRef.current;
+
+    if (desiredState === 'sleep') {
+      if (previousDesiredState !== 'sleep') {
+        const sleepEntrySequence =
+          idlePosture === 'duck_sit' ? SLEEP_ENTRY_FROM_DUCK_SIT : SLEEP_ENTRY_FROM_STANDING;
+        startMotionSequence(sleepEntrySequence);
+      }
+      previousDesiredStateRef.current = desiredState;
+      return;
+    }
+
+    if (previousDesiredState === 'sleep') {
+      if (startMotionSequence([WAKE_FROM_SLEEP_TRANSITION])) {
+        setIdlePosture('standing');
+      }
+    }
+
+    previousDesiredStateRef.current = desiredState;
+  }, [desiredState, idleMotionFolder, idlePosture, startMotionSequence]);
+
+  useEffect(() => {
     if (!canPlayIdleMotion) {
       clearIdleMotionTimer();
-      setIdleMotionFolder(null);
+      if (desiredState !== 'sleep' && idleMotionFolder !== WAKE_FROM_SLEEP_TRANSITION) {
+        clearMotionSequence();
+      }
       return undefined;
     }
     if (idleMotionFolder) {
@@ -338,25 +492,56 @@ function PetRenderer({
       return undefined;
     }
 
-    const idleMotionKeyframes = idleMotionConfig.variants
-      .map((variant) => catalog.byFolder.get(variant))
-      .filter((variant): variant is KeyframeDescriptor => Boolean(variant));
-    if (idleMotionKeyframes.length === 0) {
+    const standingIdleKeyframes = availableKeyframes(catalog, idleMotionConfig.variants);
+    const duckSitIdleKeyframes = availableKeyframes(
+      catalog,
+      idleMotionConfig.duckSitVariants ?? DEFAULT_IDLE_MOTION.duckSitVariants
+    );
+    if (standingIdleKeyframes.length === 0 && duckSitIdleKeyframes.length === 0) {
       return undefined;
     }
 
     idleMotionTimerRef.current = window.setTimeout(() => {
-      const nextMotion = weightedRandomKeyframe(idleMotionKeyframes);
+      if (
+        idlePosture === 'standing' &&
+        catalog.byFolder.has(STAND_TO_DUCK_SIT) &&
+        Math.random() < clampProbability(idleMotionConfig.standToDuckSitProbability, 0.35)
+      ) {
+        startMotionSequence([STAND_TO_DUCK_SIT]);
+        return;
+      }
+
+      if (
+        idlePosture === 'duck_sit' &&
+        catalog.byFolder.has(DUCK_SIT_TO_STAND) &&
+        Math.random() < clampProbability(idleMotionConfig.duckSitToStandProbability, 0.3)
+      ) {
+        startMotionSequence([DUCK_SIT_TO_STAND]);
+        return;
+      }
+
+      const pool = idlePosture === 'duck_sit' ? duckSitIdleKeyframes : standingIdleKeyframes;
+      const nextMotion = weightedRandomKeyframe(pool);
       if (nextMotion) {
-        setIdleMotionFolder(nextMotion.folder);
+        startMotionSequence([nextMotion.folder]);
       }
     }, randomDelay(idleMotionConfig.minDelayMs, idleMotionConfig.maxDelayMs));
 
     return clearIdleMotionTimer;
-  }, [canPlayIdleMotion, catalog.byFolder, clearIdleMotionTimer, idleMotionFolder, statesConfig.idleMotion]);
+  }, [
+    canPlayIdleMotion,
+    catalog,
+    clearIdleMotionTimer,
+    clearMotionSequence,
+    desiredState,
+    idleMotionFolder,
+    idlePosture,
+    startMotionSequence,
+    statesConfig.idleMotion
+  ]);
 
   useEffect(() => {
-    if (!idleMotionFolder || !activeKeyframe) {
+    if (!idleMotionFolder || !activeKeyframe || activeKeyframe.motion.playback !== 'loop') {
       return undefined;
     }
 
@@ -364,12 +549,28 @@ function PetRenderer({
       setIdleMotionFolder(null);
     }, activeMotionDurationMs);
     return () => window.clearTimeout(timer);
-  }, [activeMotionDurationMs, idleMotionFolder]);
+  }, [activeKeyframe, activeMotionDurationMs, idleMotionFolder]);
 
   const handleMotionComplete = useCallback((): void => {
-    if (idleMotionFolder) {
-      setIdleMotionFolder(null);
+    const completedFolder = idleMotionFolder;
+
+    if (!completedFolder) {
+      return;
     }
+
+    if (completedFolder === STAND_TO_DUCK_SIT) {
+      setIdlePosture('duck_sit');
+    } else if (completedFolder === DUCK_SIT_TO_STAND || completedFolder === WAKE_FROM_SLEEP_TRANSITION) {
+      setIdlePosture('standing');
+    }
+
+    const nextFolder = motionQueueRef.current.shift();
+    if (nextFolder) {
+      setIdleMotionFolder(nextFolder);
+      return;
+    }
+
+    setIdleMotionFolder(null);
   }, [idleMotionFolder]);
 
   if (!activeKeyframe) {
@@ -387,7 +588,7 @@ function PetRenderer({
     <main className="companion-shell">
       <div className="companion-stage">
         <Companion
-          key={`${renderedState}:${activeKeyframe.folder}`}
+          key={`${renderedState}:${activeKeyframe.folder}:${selection.replayId ?? 0}`}
           keyframe={activeKeyframe}
           canvas={companionConfig.renderer.keyframeCanvas}
           state={renderedState}
@@ -688,6 +889,7 @@ function ControlCenterApp(): ReactElement | null {
   }
 
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const activeFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
   const activeReminder = reminderState && !reminderState.isStale ? reminderState : null;
   const activeTaskNotification = taskNotification && !taskNotification.isStale ? taskNotification : null;
 
@@ -720,15 +922,21 @@ function ControlCenterApp(): ReactElement | null {
         {activeModule === 'status' ? (
           <StatusPanel
             open
-            states={catalog.states}
-            idleVariants={catalog.idleVariants}
+            actionGroups={catalog.actionGroups}
             activeState={selection.state}
-            activeVariant={selection.variant}
+            activeFolder={activeFolder}
             stateLabels={STATE_LABELS}
             controls={windowControls}
             scaleConfig={companionConfig.renderer}
-            onSelectState={(state) => updateManualSelection({ state, variant: null })}
-            onSelectIdleVariant={(variant) => updateManualSelection({ state: 'idle', variant })}
+            onSelectAction={(action) => {
+              const state = stateForActionFolder(action.folder);
+              updateManualSelection({
+                state,
+                variant: action.folder === keyframeFolderForState(state) ? null : action.folder,
+                folder: action.folder,
+                replayId: Date.now()
+              });
+            }}
             onScaleDown={() => setWindowScale(windowControls.scale - companionConfig.renderer.scaleStep)}
             onScaleUp={() => setWindowScale(windowControls.scale + companionConfig.renderer.scaleStep)}
             onScaleReset={() => setWindowScale(companionConfig.renderer.defaultScale)}

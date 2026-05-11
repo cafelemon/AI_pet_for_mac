@@ -27,6 +27,7 @@ def load_source_config() -> dict[str, object]:
                 "sourceFile": None,
                 "maskPreset": "none",
                 "mattePreset": "white",
+                "cropPreset": "none",
             },
             "sources": {},
         }
@@ -44,11 +45,13 @@ def source_info(action_id: str) -> dict[str, str | None]:
     source_file = defaults.get("sourceFile")
     mask_preset = defaults.get("maskPreset") or "none"
     matte_preset = defaults.get("mattePreset") or "white"
+    crop_preset = defaults.get("cropPreset") or "none"
     return {
         "provider": str(provider),
         "sourceFile": str(source_file) if source_file else None,
         "maskPreset": str(mask_preset),
         "mattePreset": str(matte_preset),
+        "cropPreset": str(crop_preset),
     }
 
 
@@ -143,8 +146,8 @@ def write_progress(actions: list[dict[str, object]]) -> None:
         "",
         "## Progress Table",
         "",
-        "| Stage | Category | Action | Playback | Runtime wired | Provider | Mask preset | Matte preset | White keyframe | Source video | WebM | Status | Source path |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Stage | Category | Action | Playback | Runtime wired | Provider | Mask preset | Matte preset | Crop preset | White keyframe | Source video | WebM | Status | Source path |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
     for action in actions:
@@ -164,6 +167,7 @@ def write_progress(actions: list[dict[str, object]]) -> None:
                     str(source_meta["provider"]),
                     f"`{source_meta['maskPreset']}`",
                     f"`{source_meta['mattePreset']}`",
+                    f"`{source_meta['cropPreset']}`",
                     file_status(white_keyframe_dir(action_id)),
                     file_status(source_path(action_id)),
                     file_status(webm_path(action_id)),

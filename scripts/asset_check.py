@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import struct
 from pathlib import Path
@@ -12,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 KEYFRAME_ROOT = ROOT / "assets" / "keyframes"
 WEBM_ROOT = ROOT / "assets" / "webm"
+STATES_CONFIG_PATH = ROOT / "data" / "config" / "states.config.json"
 CANVAS_SIZE = (1536, 1728)
 BASE_STATES = (
     "idle",
@@ -31,6 +33,17 @@ KEYFRAME_FOLDERS = BASE_STATES + IDLE_VARIANTS
 NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_(?P<index>\d{2})\.(png|webp)$")
 WEBM_NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_loop\.webm$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def configured_render_folders() -> tuple[str, ...]:
+    if not STATES_CONFIG_PATH.exists():
+        return KEYFRAME_FOLDERS
+
+    config = json.loads(STATES_CONFIG_PATH.read_text(encoding="utf-8"))
+    folders = config.get("pa0KeyframeFolders")
+    if not isinstance(folders, list):
+        return KEYFRAME_FOLDERS
+    return tuple(str(folder) for folder in folders)
 
 
 def read_png_info(path: Path) -> tuple[int, int, bool]:
@@ -59,7 +72,9 @@ def check_webm_assets(webm_strict: bool, failures: list[str], warnings: list[str
             failures.append(message)
         return
 
-    for folder in KEYFRAME_FOLDERS:
+    expected_folders = configured_render_folders()
+
+    for folder in expected_folders:
         state_dir = WEBM_ROOT / folder
         expected_loop = state_dir / f"{folder}_loop.webm"
 
@@ -84,7 +99,7 @@ def check_webm_assets(webm_strict: bool, failures: list[str], warnings: list[str
                 failures.append(f"empty PB1 WebM asset: {webm.relative_to(ROOT)}")
 
     for directory in sorted(path for path in WEBM_ROOT.iterdir() if path.is_dir()):
-        if directory.name not in KEYFRAME_FOLDERS:
+        if directory.name not in expected_folders:
             warnings.append(f"unexpected PB1 WebM directory: {directory.relative_to(ROOT)}")
 
 
@@ -92,7 +107,9 @@ def check_assets(strict: bool, webm_strict: bool) -> int:
     failures: list[str] = []
     warnings: list[str] = []
 
-    for folder in KEYFRAME_FOLDERS:
+    expected_folders = configured_render_folders()
+
+    for folder in expected_folders:
         state_dir = KEYFRAME_ROOT / folder
         if not state_dir.is_dir():
             failures.append(f"missing directory: {state_dir.relative_to(ROOT)}")
@@ -132,7 +149,7 @@ def check_assets(strict: bool, webm_strict: bool) -> int:
                     failures.append(f"missing PNG alpha channel: {keyframe.relative_to(ROOT)}")
 
     for directory in sorted(path for path in KEYFRAME_ROOT.iterdir() if path.is_dir()):
-        if directory.name not in KEYFRAME_FOLDERS:
+        if directory.name not in expected_folders:
             warnings.append(f"unexpected keyframe directory: {directory.relative_to(ROOT)}")
 
     check_webm_assets(webm_strict, failures, warnings)

@@ -2,6 +2,11 @@ import type { ReactElement } from 'react';
 
 import type { CompanionState, KeyframeDescriptor, WindowControls } from '../../shared/types';
 
+export interface StatusActionGroup {
+  label: string;
+  actions: KeyframeDescriptor[];
+}
+
 interface ScaleConfig {
   defaultScale: number;
   minScale: number;
@@ -11,15 +16,13 @@ interface ScaleConfig {
 
 interface StatusPanelProps {
   open: boolean;
-  states: CompanionState[];
-  idleVariants: KeyframeDescriptor[];
+  actionGroups: StatusActionGroup[];
   activeState: CompanionState;
-  activeVariant: string | null;
+  activeFolder: string | null;
   stateLabels: Record<CompanionState, string>;
   controls: WindowControls;
   scaleConfig: ScaleConfig;
-  onSelectState: (state: CompanionState) => void;
-  onSelectIdleVariant: (variantFolder: string) => void;
+  onSelectAction: (action: KeyframeDescriptor) => void;
   onScaleDown: () => void;
   onScaleUp: () => void;
   onScaleReset: () => void;
@@ -29,20 +32,18 @@ interface StatusPanelProps {
 }
 
 function variantLabel(keyframe: KeyframeDescriptor): string {
-  return keyframe.label.replace(/^idle_/, '').replace(/_/g, ' ');
+  return keyframe.label.replace(/^idle_/, '').replace(/^duck_sit_/, 'duck sit ').replace(/_/g, ' ');
 }
 
 export function StatusPanel({
   open,
-  states,
-  idleVariants,
+  actionGroups,
   activeState,
-  activeVariant,
+  activeFolder,
   stateLabels,
   controls,
   scaleConfig,
-  onSelectState,
-  onSelectIdleVariant,
+  onSelectAction,
   onScaleDown,
   onScaleUp,
   onScaleReset,
@@ -54,10 +55,10 @@ export function StatusPanel({
     return null;
   }
 
-  const activeVariantKeyframe = activeVariant
-    ? idleVariants.find((variant) => variant.folder === activeVariant)
-    : undefined;
-  const activeLabel = activeVariantKeyframe ? variantLabel(activeVariantKeyframe) : stateLabels[activeState];
+  const activeAction = actionGroups
+    .flatMap((group) => group.actions)
+    .find((action) => action.folder === activeFolder);
+  const activeLabel = activeAction ? variantLabel(activeAction) : stateLabels[activeState];
 
   return (
     <section className="status-panel" aria-label="PA3 状态测试面板" data-hit-interactive="true">
@@ -71,41 +72,24 @@ export function StatusPanel({
         </button>
       </header>
 
-      <div className="status-panel__group">
-        <p className="status-panel__label">状态</p>
-        <div className="status-panel__grid">
-          {states.map((state) => (
-            <button
-              key={state}
-              className={state === activeState && !activeVariant ? 'panel-button panel-button--active' : 'panel-button'}
-              type="button"
-              aria-pressed={state === activeState && !activeVariant}
-              onClick={() => onSelectState(state)}
-            >
-              {stateLabels[state]}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {idleVariants.length > 0 ? (
-        <div className="status-panel__group">
-          <p className="status-panel__label">Idle Variant</p>
+      {actionGroups.map((group) => (
+        <div className="status-panel__group" key={group.label}>
+          <p className="status-panel__label">{group.label}</p>
           <div className="status-panel__grid">
-            {idleVariants.map((variant) => (
+            {group.actions.map((action) => (
               <button
-                key={variant.folder}
-                className={variant.folder === activeVariant ? 'panel-button panel-button--active' : 'panel-button'}
+                key={action.folder}
+                className={action.folder === activeFolder ? 'panel-button panel-button--active' : 'panel-button'}
                 type="button"
-                aria-pressed={variant.folder === activeVariant}
-                onClick={() => onSelectIdleVariant(variant.folder)}
+                aria-pressed={action.folder === activeFolder}
+                onClick={() => onSelectAction(action)}
               >
-                {variantLabel(variant)}
+                {variantLabel(action)}
               </button>
             ))}
           </div>
         </div>
-      ) : null}
+      ))}
 
       <div className="status-panel__group">
         <p className="status-panel__label">窗口</p>

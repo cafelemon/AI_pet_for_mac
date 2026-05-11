@@ -1,0 +1,4 @@
+interface:
+  display_name: "White BG Video Matting"
+  short_description: "AI matting for transparent pet WebM export"
+  default_prompt: "Use $white-bg-video-matting to convert an existing white-background MP4 or MOV pet video into a transparent WebM with QA previews."
