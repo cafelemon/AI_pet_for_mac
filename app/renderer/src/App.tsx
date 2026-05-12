@@ -72,7 +72,7 @@ const DEFAULT_IDLE_MOTION = {
   enabled: true,
   minDelayMs: 30000,
   maxDelayMs: 60000,
-  variants: ['idle_yawn', 'idle_hair', 'idle_reading'],
+  variants: ['idle_yawn', 'idle_hair', 'idle_reading', 'coding', 'thinking'],
   duckSitVariants: ['duck_sit_head_hair', 'duck_sit_finger_lip', 'duck_sit_stretch'],
   standToDuckSitProbability: 0.35,
   duckSitToStandProbability: 0.3
@@ -83,8 +83,14 @@ const DUCK_SIT_TO_STAND = 'duck_sit_to_stand';
 const DUCK_SIT_STRETCH = 'duck_sit_stretch';
 const DUCK_SIT_TO_SLEEP = 'duck_sit_to_sleep';
 const WAKE_FROM_SLEEP_TRANSITION = 'sleep_to_stand';
-const SLEEP_ENTRY_FROM_STANDING = ['idle_yawn', STAND_TO_DUCK_SIT, DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
-const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const STAND_TO_READING = 'stand_to_reading';
+const READING_TO_STAND = 'reading_to_stand';
+const STAND_TO_CODING = 'stand_to_coding';
+const CODING_TO_STAND = 'coding_to_stand';
+const STAND_TO_THINKING = 'stand_to_thinking';
+const THINKING_TO_STAND = 'thinking_to_stand';
+const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
+const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1000;
 const STATUS_ACTION_GROUPS: Array<{ label: string; folders: string[] }> = [
   {
@@ -101,7 +107,16 @@ const STATUS_ACTION_GROUPS: Array<{ label: string; folders: string[] }> = [
   },
   {
     label: '姿态衔接',
-    folders: [STAND_TO_DUCK_SIT, DUCK_SIT_TO_STAND]
+    folders: [
+      STAND_TO_DUCK_SIT,
+      DUCK_SIT_TO_STAND,
+      STAND_TO_READING,
+      READING_TO_STAND,
+      STAND_TO_CODING,
+      CODING_TO_STAND,
+      STAND_TO_THINKING,
+      THINKING_TO_STAND
+    ]
   },
   {
     label: '睡眠相关',

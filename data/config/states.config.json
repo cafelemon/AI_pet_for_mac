@@ -7,8 +7,7 @@
     "success",
     "error",
     "reminder",
-    "sleep",
-    "weather"
+    "sleep"
   ],
   "idleVariants": [
     "idle_reading",
@@ -22,7 +21,9 @@
     "variants": [
       "idle_yawn",
       "idle_hair",
-      "idle_reading"
+      "idle_reading",
+      "coding",
+      "thinking"
     ],
     "duckSitVariants": [
       "duck_sit_head_hair",
@@ -59,7 +60,7 @@
     },
     "sleep": {
       "playback": "loop",
-      "durationMs": 3040
+      "durationMs": 3080
     },
     "sleep_to_stand": {
       "playback": "one_shot",
@@ -94,11 +95,35 @@
     },
     "duck_sit_to_sleep": {
       "playback": "one_shot",
-      "durationMs": 12560
+      "durationMs": 14210
+    },
+    "stand_to_reading": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "reading_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "stand_to_coding": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "coding_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "stand_to_thinking": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "thinking_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
     },
     "idle_reading": {
       "playback": "loop",
-      "durationMs": 5040,
+      "durationMs": 10040,
       "idleWeight": 1
     },
     "idle_yawn": {
@@ -139,7 +164,6 @@
     "coding": 3,
     "thinking": 4,
     "success": 5,
-    "weather": 6,
     "sleep": 7,
     "idle": 8
   }

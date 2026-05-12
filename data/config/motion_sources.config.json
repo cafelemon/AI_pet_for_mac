@@ -17,8 +17,8 @@
       "maskPreset": "jimeng_corner"
     },
     "sleep": {
-      "provider": "kling",
-      "sourceFile": "kling_sleep.mp4",
+      "provider": "jianying",
+      "sourceFile": "jianying_sleep.mov",
       "maskPreset": "none",
       "mattePreset": "sleep_props"
     },
@@ -55,7 +55,7 @@
     },
     "idle_reading": {
       "provider": "jimeng",
-      "sourceFile": "idle_reading_jimeng.mp4",
+      "sourceFile": "jimeng_reading.mp4",
       "maskPreset": "jimeng_corner",
       "mattePreset": "neutral_floor"
     },
@@ -96,11 +96,10 @@
       "mattePreset": "neutral_floor"
     },
     "duck_sit_to_sleep": {
-      "provider": "kling",
-      "sourceFile": "kling_duck_sit_to_sleep.mp4",
+      "provider": "jianying",
+      "sourceFile": "jianying_duck_sit_to_sleep.mov",
       "maskPreset": "none",
-      "mattePreset": "sleep_props",
-      "cropPreset": "duck_sit_to_sleep"
+      "mattePreset": "sleep_props"
     },
     "sleep_to_stand": {
       "provider": "kling",
@@ -108,6 +107,42 @@
       "maskPreset": "none",
       "mattePreset": "sleep_props",
       "cropPreset": "sleep_to_stand"
+    },
+    "stand_to_reading": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "reading_to_stand": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "stand_to_coding": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "coding_to_stand": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "stand_to_thinking": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "thinking_to_stand": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
     }
   }
 }

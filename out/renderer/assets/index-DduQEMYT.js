@@ -12894,19 +12894,17 @@ function ReminderPanel({
   ] });
 }
 function variantLabel(keyframe) {
-  return keyframe.label.replace(/^idle_/, "").replace(/_/g, " ");
+  return keyframe.label.replace(/^idle_/, "").replace(/^duck_sit_/, "duck sit ").replace(/_/g, " ");
 }
 function StatusPanel({
   open,
-  states,
-  idleVariants,
+  actionGroups,
   activeState,
-  activeVariant,
+  activeFolder,
   stateLabels,
   controls,
   scaleConfig,
-  onSelectState,
-  onSelectIdleVariant,
+  onSelectAction,
   onScaleDown,
   onScaleUp,
   onScaleReset,
@@ -12917,8 +12915,8 @@ function StatusPanel({
   if (!open) {
     return null;
   }
-  const activeVariantKeyframe = activeVariant ? idleVariants.find((variant) => variant.folder === activeVariant) : void 0;
-  const activeLabel = activeVariantKeyframe ? variantLabel(activeVariantKeyframe) : stateLabels[activeState];
+  const activeAction = actionGroups.flatMap((group) => group.actions).find((action) => action.folder === activeFolder);
+  const activeLabel = activeAction ? variantLabel(activeAction) : stateLabels[activeState];
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "status-panel", "aria-label": "PA3 状态测试面板", "data-hit-interactive": "true", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "status-panel__header", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -12927,34 +12925,20 @@ function StatusPanel({
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-button", type: "button", "aria-label": "关闭面板", onClick: onClose, children: "x" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "状态" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-panel__grid", children: states.map((state) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    actionGroups.map((group) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: group.label }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-panel__grid", children: group.actions.map((action) => /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: state === activeState && !activeVariant ? "panel-button panel-button--active" : "panel-button",
+          className: action.folder === activeFolder ? "panel-button panel-button--active" : "panel-button",
           type: "button",
-          "aria-pressed": state === activeState && !activeVariant,
-          onClick: () => onSelectState(state),
-          children: stateLabels[state]
+          "aria-pressed": action.folder === activeFolder,
+          onClick: () => onSelectAction(action),
+          children: variantLabel(action)
         },
-        state
+        action.folder
       )) })
-    ] }),
-    idleVariants.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "Idle Variant" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "status-panel__grid", children: idleVariants.map((variant) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          className: variant.folder === activeVariant ? "panel-button panel-button--active" : "panel-button",
-          type: "button",
-          "aria-pressed": variant.folder === activeVariant,
-          onClick: () => onSelectIdleVariant(variant.folder),
-          children: variantLabel(variant)
-        },
-        variant.folder
-      )) })
-    ] }) : null,
+    ] }, group.label)),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "status-panel__group", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__label", children: "窗口" }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scale-control", children: [
@@ -13216,7 +13200,7 @@ const DEFAULT_IDLE_MOTION = {
   enabled: true,
   minDelayMs: 3e4,
   maxDelayMs: 6e4,
-  variants: ["idle_yawn", "idle_hair", "idle_reading"],
+  variants: ["idle_yawn", "idle_hair", "idle_reading", "coding", "thinking"],
   duckSitVariants: ["duck_sit_head_hair", "duck_sit_finger_lip", "duck_sit_stretch"],
   standToDuckSitProbability: 0.35,
   duckSitToStandProbability: 0.3
@@ -13227,9 +13211,46 @@ const DUCK_SIT_TO_STAND = "duck_sit_to_stand";
 const DUCK_SIT_STRETCH = "duck_sit_stretch";
 const DUCK_SIT_TO_SLEEP = "duck_sit_to_sleep";
 const WAKE_FROM_SLEEP_TRANSITION = "sleep_to_stand";
-const SLEEP_ENTRY_FROM_STANDING = ["idle_yawn", STAND_TO_DUCK_SIT, DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
-const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_STRETCH, DUCK_SIT_TO_SLEEP];
+const STAND_TO_READING = "stand_to_reading";
+const READING_TO_STAND = "reading_to_stand";
+const STAND_TO_CODING = "stand_to_coding";
+const CODING_TO_STAND = "coding_to_stand";
+const STAND_TO_THINKING = "stand_to_thinking";
+const THINKING_TO_STAND = "thinking_to_stand";
+const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
+const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1e3;
+const STATUS_ACTION_GROUPS = [
+  {
+    label: "核心状态",
+    folders: ["idle", "coding", "thinking", "success", "error", "reminder"]
+  },
+  {
+    label: "站立小动作",
+    folders: ["idle_yawn", "idle_hair", "idle_reading"]
+  },
+  {
+    label: "鸭子坐",
+    folders: [DUCK_SIT_IDLE, "duck_sit_head_hair", "duck_sit_finger_lip", DUCK_SIT_STRETCH]
+  },
+  {
+    label: "姿态衔接",
+    folders: [
+      STAND_TO_DUCK_SIT,
+      DUCK_SIT_TO_STAND,
+      STAND_TO_READING,
+      READING_TO_STAND,
+      STAND_TO_CODING,
+      CODING_TO_STAND,
+      STAND_TO_THINKING,
+      THINKING_TO_STAND
+    ]
+  },
+  {
+    label: "睡眠相关",
+    folders: ["sleep", DUCK_SIT_TO_SLEEP, WAKE_FROM_SLEEP_TRANSITION]
+  }
+];
 const EMPTY_TASK_SNAPSHOT = {
   today: [],
   currentCodex: null,
@@ -13247,6 +13268,12 @@ function isCompanionState(state) {
 function keyframeFolderForState(state) {
   return STATE_KEYFRAME_FOLDERS[state] ?? state;
 }
+function stateForActionFolder(folder) {
+  if (isCompanionState(folder)) {
+    return folder;
+  }
+  return folder === DUCK_SIT_TO_SLEEP || folder === WAKE_FROM_SLEEP_TRANSITION ? "sleep" : "idle";
+}
 function buildCompanionCatalog(keyframes, statesConfig) {
   const byFolder = new Map(keyframes.map((keyframe) => [keyframe.folder, keyframe]));
   const states = RENDER_STATES.filter(
@@ -13262,15 +13289,20 @@ function buildCompanionCatalog(keyframes, statesConfig) {
   return {
     states,
     idleVariants: statesConfig.idleVariants.map((variant) => byFolder.get(variant)).filter((variant) => Boolean(variant)),
+    actionGroups: STATUS_ACTION_GROUPS.map((group) => ({
+      label: group.label,
+      actions: group.folders.map((folder) => byFolder.get(folder)).filter((action) => Boolean(action))
+    })).filter((group) => group.actions.length > 0),
     byFolder,
     byState
   };
 }
 function defaultCatalogSelection(defaultState, catalog) {
   if (isCompanionState(defaultState) && catalog.byState.has(defaultState)) {
-    return { state: defaultState, variant: null };
+    return { state: defaultState, variant: null, folder: keyframeFolderForState(defaultState), replayId: 0 };
   }
-  return { state: catalog.byState.has("idle") ? "idle" : catalog.states[0] ?? "idle", variant: null };
+  const state = catalog.byState.has("idle") ? "idle" : catalog.states[0] ?? "idle";
+  return { state, variant: null, folder: keyframeFolderForState(state), replayId: 0 };
 }
 function clampRendererScale(scale, companionConfig) {
   const { minScale, maxScale } = companionConfig.renderer;
@@ -13425,7 +13457,6 @@ function PetRenderer({
     motionQueueRef.current = [];
     setIdleMotionFolder(null);
   }, []);
-  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
   const codexOverride = codexState && codexState.state !== "idle" ? codexState : null;
   const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
   const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
@@ -13442,7 +13473,10 @@ function PetRenderer({
   const runtimeOverride = runtimeCandidates.sort(
     (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
   )[0] ?? null;
-  const canAutoSleep = !runtimeOverride && selection.state === "idle" && !selection.variant;
+  const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
+  const exactManualFolder = !runtimeOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
+  const canAutoSleep = !runtimeOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
   reactExports.useEffect(() => {
     if (!canAutoSleep) {
       setAutoSleep(false);
@@ -13454,12 +13488,13 @@ function PetRenderer({
     return () => window.clearTimeout(timer);
   }, [canAutoSleep, selection.state, selection.variant]);
   const desiredState = runtimeOverride?.state ?? (autoSleep ? "sleep" : selection.state);
-  const renderedState = renderedStateForMotion(idleMotionFolder, desiredState);
-  const canPlayIdleMotion = desiredState === "idle" && !runtimeOverride && selection.state === "idle" && !selection.variant;
-  const renderedVariant = !idleMotionFolder && renderedState === "idle" ? selection.variant : null;
+  const renderedState = exactManualFolder ? renderedStateForMotion(exactManualFolder, desiredState) : renderedStateForMotion(idleMotionFolder, desiredState);
+  const canPlayIdleMotion = desiredState === "idle" && !runtimeOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
+  const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === "idle" ? selection.variant : null;
+  const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : void 0;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : void 0;
   const postureIdleKeyframe = !idleMotionFolder && renderedState === "idle" && !renderedVariant && idlePosture === "duck_sit" ? catalog.byFolder.get(DUCK_SIT_IDLE) : void 0;
-  const activeKeyframe = activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
+  const activeKeyframe = manualActionKeyframe ?? activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
   reactExports.useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
@@ -13569,7 +13604,7 @@ function PetRenderer({
         onHitRegionsChange,
         onMotionComplete: handleMotionComplete
       },
-      `${renderedState}:${activeKeyframe.folder}`
+      `${renderedState}:${activeKeyframe.folder}:${selection.replayId ?? 0}`
     ) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { state: renderedState, message: bubbleMessage, actions: null })
   ] });
@@ -13810,6 +13845,7 @@ function ControlCenterApp() {
     return null;
   }
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
+  const activeFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
   const activeReminder = reminderState && !reminderState.isStale ? reminderState : null;
   const activeTaskNotification = taskNotification && !taskNotification.isStale ? taskNotification : null;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "control-center-shell", children: [
@@ -13835,15 +13871,21 @@ function ControlCenterApp() {
         StatusPanel,
         {
           open: true,
-          states: catalog.states,
-          idleVariants: catalog.idleVariants,
+          actionGroups: catalog.actionGroups,
           activeState: selection.state,
-          activeVariant: selection.variant,
+          activeFolder,
           stateLabels: STATE_LABELS,
           controls: windowControls,
           scaleConfig: companionConfig.renderer,
-          onSelectState: (state) => updateManualSelection({ state, variant: null }),
-          onSelectIdleVariant: (variant) => updateManualSelection({ state: "idle", variant }),
+          onSelectAction: (action) => {
+            const state = stateForActionFolder(action.folder);
+            updateManualSelection({
+              state,
+              variant: action.folder === keyframeFolderForState(state) ? null : action.folder,
+              folder: action.folder,
+              replayId: Date.now()
+            });
+          },
           onScaleDown: () => setWindowScale(windowControls.scale - companionConfig.renderer.scaleStep),
           onScaleUp: () => setWindowScale(windowControls.scale + companionConfig.renderer.scaleStep),
           onScaleReset: () => setWindowScale(companionConfig.renderer.defaultScale),

@@ -3,6 +3,7 @@
 # Local virtual environments
 .venv/
 venv/
+skills/**/.venv/
 
 # Frontend dependencies and build caches
 node_modules/
@@ -17,6 +18,8 @@ __pycache__/
 *.db
 
 # Runtime data
+runtime/
+tools/
 data/logs/*
 !data/logs/.gitkeep
 data/runtime_state/*
@@ -25,3 +28,4 @@ data/runtime_state/*
 # Source videos and per-state matting workdirs
 assets/states/*/source/*
 !assets/states/*/source/.gitkeep
+assets/states/*/source/.matting_work/

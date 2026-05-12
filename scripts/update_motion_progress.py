@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the PB/PB3 motion progress table from local assets."""
+"""Generate the motion progress table from local assets."""
 
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ def build_summary(actions: list[dict[str, object]]) -> dict[str, int]:
 def write_progress(actions: list[dict[str, object]]) -> None:
     summary = build_summary(actions)
     rows = [
-        "# PB3 Action Progress",
+        "# Motion Action Progress",
         "",
         "This table is generated from `data/config/motion_catalog.config.json` and local asset presence.",
         "",
