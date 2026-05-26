@@ -994,6 +994,7 @@ const CODEX_RUNTIME_STATES = /* @__PURE__ */ new Set([
 ]);
 const COMPANION_STATES = /* @__PURE__ */ new Set([
   "idle",
+  "reading",
   "coding",
   "thinking",
   "waiting_auth",
@@ -1113,6 +1114,10 @@ function registerConfigHandlers() {
   electron.ipcMain.handle(
     "config:get-states",
     () => readJsonFile("data", "config", "states.config.json")
+  );
+  electron.ipcMain.handle(
+    "config:get-action-registry",
+    () => readJsonFile("data", "config", "action_registry.config.json")
   );
 }
 async function loadCodexPluginConfig() {

@@ -12,6 +12,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
+import action_registry
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CANVAS_SIZE = (1536, 1728)
@@ -103,7 +105,7 @@ LAYOUT_PRESETS: dict[str, LayoutPreset] = {
     "idle": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
     "idle_hair": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.56),
     "idle_yawn": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.70, max_scale=0.82),
-    "idle_reading": LayoutPreset(target_cx=768, target_bottom=1724, target_height=1560, min_scale=1.03, max_scale=1.08),
+    "reading": LayoutPreset(target_cx=768, target_bottom=1724, target_height=1560, min_scale=1.03, max_scale=1.08),
     "coding": LayoutPreset(target_cx=780, target_bottom=1724, target_height=1536, min_scale=1.03, max_scale=1.08),
     "reminder": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.72, max_scale=0.82),
     "thinking": LayoutPreset(target_bottom=1648, min_scale=0.95, max_scale=1.08),
@@ -222,7 +224,7 @@ WHITE_CLEANUP_BOXES: dict[str, tuple[AlphaBox, ...]] = {
         AlphaBox(390, 1520, 575, 1705),
         AlphaBox(720, 1580, 1010, 1705),
     ),
-    "idle_reading": (
+    "reading": (
         AlphaBox(330, 235, 1205, 1728),
         AlphaBox(880, 860, 1210, 1728),
         AlphaBox(330, 1400, 520, 1728),
@@ -251,7 +253,7 @@ WHITE_CLEANUP_BOXES: dict[str, tuple[AlphaBox, ...]] = {
 }
 CLEANUP_RGB_MIN: dict[str, int] = {
     "coding": 190,
-    "idle_reading": 205,
+    "reading": 205,
     "thinking": 165,
     "error": 165,
     "duck_sit_idle": 230,
@@ -268,7 +270,7 @@ FINAL_WHITE_CLEANUP_BOXES: dict[str, tuple[AlphaBox, ...]] = {
         AlphaBox(1180, 1470, 1360, 1728),
         AlphaBox(1390, 1500, 1505, 1728),
     ),
-    "idle_reading": (
+    "reading": (
         AlphaBox(350, 250, 1185, 1728),
         AlphaBox(895, 875, 1188, 1728),
         AlphaBox(345, 1435, 505, 1728),
@@ -311,7 +313,7 @@ ALPHA_RESTORE_BOXES: dict[str, tuple[AlphaBox, ...]] = {
         AlphaBox(560, 560, 860, 930),
         AlphaBox(760, 650, 990, 930),
     ),
-    "idle_reading": (
+    "reading": (
         AlphaBox(470, 230, 760, 520),
         AlphaBox(500, 560, 770, 920),
         AlphaBox(700, 620, 900, 900),
@@ -397,7 +399,7 @@ def load_states() -> tuple[str, ...]:
             "idle",
             "idle_yawn",
             "idle_hair",
-            "idle_reading",
+            "reading",
             "coding",
             "thinking",
             "error",
@@ -411,7 +413,7 @@ def load_states() -> tuple[str, ...]:
 
 
 def source_dir(state: str) -> Path:
-    return ROOT / "assets" / "states" / state / "source"
+    return action_registry.source_dir(state)
 
 
 def source_info(state: str) -> dict[str, str | None]:
@@ -438,7 +440,7 @@ def source_info(state: str) -> dict[str, str | None]:
 def source_candidates(state: str) -> list[Path]:
     info = source_info(state)
     directory = source_dir(state)
-    candidates: list[Path] = []
+    candidates: list[Path] = action_registry.source_video_paths(state)
     if info["sourceFile"]:
         candidates.append(directory / info["sourceFile"])
     candidates.extend(
@@ -470,7 +472,7 @@ def source_video(state: str) -> Path:
 
 
 def output_webm(state: str) -> Path:
-    return ROOT / "assets" / "webm" / state / f"{state}_loop.webm"
+    return action_registry.webm_path(state)
 
 
 def qa_contact_sheet(state: str) -> Path:
@@ -739,7 +741,7 @@ def alpha_restore_condition(state: str) -> str:
             f"lte({rgb_range},112)"
         )
         prop_candidate = skin_candidate
-    elif state == "idle_reading":
+    elif state == "reading":
         skin_candidate = (
             "gte(r(X,Y),128)*gte(g(X,Y),92)*gte(b(X,Y),74)*"
             "gte(r(X,Y)-g(X,Y),10)*gte(g(X,Y)-b(X,Y),4)*"
@@ -1113,7 +1115,7 @@ def write_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
 
 
 def write_fallback_keyframe(ffmpeg: str, state: str, webm: Path) -> Path:
-    output = ROOT / "assets" / "keyframes" / state / f"{state}_01.png"
+    output = action_registry.fallback_path(state)
     output.parent.mkdir(parents=True, exist_ok=True)
     run(
         [

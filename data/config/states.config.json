@@ -1,6 +1,7 @@
 {
   "states": [
     "idle",
+    "reading",
     "coding",
     "thinking",
     "waiting_auth",
@@ -10,7 +11,6 @@
     "sleep"
   ],
   "idleVariants": [
-    "idle_reading",
     "idle_yawn",
     "idle_hair"
   ],
@@ -21,7 +21,6 @@
     "variants": [
       "idle_yawn",
       "idle_hair",
-      "idle_reading",
       "coding",
       "thinking"
     ],
@@ -121,7 +120,7 @@
       "playback": "one_shot",
       "durationMs": 5000
     },
-    "idle_reading": {
+    "reading": {
       "playback": "loop",
       "durationMs": 10040,
       "idleWeight": 1
@@ -139,6 +138,7 @@
   },
   "pa0KeyframeFolders": [
     "idle",
+    "reading",
     "coding",
     "thinking",
     "success",
@@ -153,7 +153,6 @@
     "duck_sit_to_stand",
     "duck_sit_to_sleep",
     "sleep_to_stand",
-    "idle_reading",
     "idle_yawn",
     "idle_hair"
   ],
@@ -164,6 +163,7 @@
     "coding": 3,
     "thinking": 4,
     "success": 5,
+    "reading": 6,
     "sleep": 7,
     "idle": 8
   }

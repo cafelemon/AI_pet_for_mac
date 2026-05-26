@@ -53,7 +53,7 @@
       "maskPreset": "jimeng_corner",
       "mattePreset": "neutral_floor"
     },
-    "idle_reading": {
+    "reading": {
       "provider": "jimeng",
       "sourceFile": "jimeng_reading.mp4",
       "maskPreset": "jimeng_corner",
@@ -139,6 +139,42 @@
       "mattePreset": "neutral_floor"
     },
     "thinking_to_stand": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "mouse_hover_look": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "mouse_leave_back": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "click_head_happy": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "click_body_confused": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "drag_start_lift": {
+      "provider": "unknown",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "neutral_floor"
+    },
+    "drag_end_dizzy": {
       "provider": "unknown",
       "sourceFile": null,
       "maskPreset": "none",

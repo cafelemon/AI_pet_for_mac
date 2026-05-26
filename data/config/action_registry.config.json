@@ -1,0 +1,536 @@
+{
+  "version": 1,
+  "assetRoot": "assets/actions",
+  "fallbackAction": "fallback_idle",
+  "actionOrder": [
+    "idle",
+    "reading",
+    "coding",
+    "thinking",
+    "success",
+    "error",
+    "reminder",
+    "sleep",
+    "duck_sit_idle",
+    "duck_sit_head_hair",
+    "duck_sit_finger_lip",
+    "duck_sit_stretch",
+    "stand_to_duck_sit",
+    "duck_sit_to_stand",
+    "duck_sit_to_sleep",
+    "sleep_to_stand",
+    "idle_yawn",
+    "idle_hair",
+    "mouse_hover_look",
+    "mouse_leave_back",
+    "click_head_happy",
+    "click_body_confused",
+    "drag_start_lift",
+    "drag_end_dizzy",
+    "stand_to_reading",
+    "reading_to_stand",
+    "stand_to_coding",
+    "coding_to_stand",
+    "stand_to_thinking",
+    "thinking_to_stand"
+  ],
+  "actions": {
+    "idle": {
+      "id": "idle",
+      "legacyId": "idle",
+      "type": "state",
+      "path": "assets/actions/states/idle/base",
+      "sourceDir": "assets/actions/states/idle/base/source",
+      "webmPath": "assets/actions/states/idle/base/webm/idle_loop.webm",
+      "fallbackPath": "assets/actions/states/idle/base/keyframes/idle_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/idle/base/source/idle_jimeng.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "reading": {
+      "id": "reading",
+      "legacyId": "idle_reading",
+      "type": "state",
+      "path": "assets/actions/states/reading/base",
+      "sourceDir": "assets/actions/states/reading/base/source",
+      "webmPath": "assets/actions/states/reading/base/webm/idle_reading_loop.webm",
+      "fallbackPath": "assets/actions/states/reading/base/keyframes/idle_reading_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/reading/base/source/jimeng_reading.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "reading"
+    },
+    "coding": {
+      "id": "coding",
+      "legacyId": "coding",
+      "type": "state",
+      "path": "assets/actions/states/coding/base",
+      "sourceDir": "assets/actions/states/coding/base/source",
+      "webmPath": "assets/actions/states/coding/base/webm/coding_loop.webm",
+      "fallbackPath": "assets/actions/states/coding/base/keyframes/coding_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/coding/base/source/coding_jimeng.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "coding"
+    },
+    "thinking": {
+      "id": "thinking",
+      "legacyId": "thinking",
+      "type": "state",
+      "path": "assets/actions/states/thinking/base",
+      "sourceDir": "assets/actions/states/thinking/base/source",
+      "webmPath": "assets/actions/states/thinking/base/webm/thinking_loop.webm",
+      "fallbackPath": "assets/actions/states/thinking/base/keyframes/thinking_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/thinking/base/source/kling_thinking.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "thinking"
+    },
+    "success": {
+      "id": "success",
+      "legacyId": "success",
+      "type": "event",
+      "path": "assets/actions/events/success",
+      "sourceDir": "assets/actions/events/success/source",
+      "webmPath": "assets/actions/events/success/webm/success_loop.webm",
+      "fallbackPath": "assets/actions/events/success/keyframes/success_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/events/success/source/kling_success.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "error": {
+      "id": "error",
+      "legacyId": "error",
+      "type": "event",
+      "path": "assets/actions/events/error",
+      "sourceDir": "assets/actions/events/error/source",
+      "webmPath": "assets/actions/events/error/webm/error_loop.webm",
+      "fallbackPath": "assets/actions/events/error/keyframes/error_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/events/error/source/error_jimeng.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "reminder": {
+      "id": "reminder",
+      "legacyId": "reminder",
+      "type": "event",
+      "path": "assets/actions/events/reminder",
+      "sourceDir": "assets/actions/events/reminder/source",
+      "webmPath": "assets/actions/events/reminder/webm/reminder_loop.webm",
+      "fallbackPath": "assets/actions/events/reminder/keyframes/reminder_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/events/reminder/source/reminder_jimeng.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "sleep": {
+      "id": "sleep",
+      "legacyId": "sleep",
+      "type": "state",
+      "path": "assets/actions/states/sleep/base",
+      "sourceDir": "assets/actions/states/sleep/base/source",
+      "webmPath": "assets/actions/states/sleep/base/webm/sleep_loop.webm",
+      "fallbackPath": "assets/actions/states/sleep/base/keyframes/sleep_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/sleep/base/source/jianying_sleep.mov"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "sleep"
+    },
+    "duck_sit_idle": {
+      "id": "duck_sit_idle",
+      "legacyId": "duck_sit_idle",
+      "type": "state",
+      "path": "assets/actions/states/duck_sit/idle",
+      "sourceDir": "assets/actions/states/duck_sit/idle/source",
+      "webmPath": "assets/actions/states/duck_sit/idle/webm/duck_sit_idle_loop.webm",
+      "fallbackPath": "assets/actions/states/duck_sit/idle/keyframes/duck_sit_idle_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/duck_sit/idle/source/kling_duck_sit_idle.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "duck_sit_idle"
+    },
+    "duck_sit_head_hair": {
+      "id": "duck_sit_head_hair",
+      "legacyId": "duck_sit_head_hair",
+      "type": "state_variant",
+      "path": "assets/actions/states/duck_sit/head_hair",
+      "sourceDir": "assets/actions/states/duck_sit/head_hair/source",
+      "webmPath": "assets/actions/states/duck_sit/head_hair/webm/duck_sit_head_hair_loop.webm",
+      "fallbackPath": "assets/actions/states/duck_sit/head_hair/keyframes/duck_sit_head_hair_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/duck_sit/head_hair/source/duck_sit_head_hai r_jimeng.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "duck_sit_idle"
+    },
+    "duck_sit_finger_lip": {
+      "id": "duck_sit_finger_lip",
+      "legacyId": "duck_sit_finger_lip",
+      "type": "state_variant",
+      "path": "assets/actions/states/duck_sit/finger_lip",
+      "sourceDir": "assets/actions/states/duck_sit/finger_lip/source",
+      "webmPath": "assets/actions/states/duck_sit/finger_lip/webm/duck_sit_finger_lip_loop.webm",
+      "fallbackPath": "assets/actions/states/duck_sit/finger_lip/keyframes/duck_sit_finger_lip_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/duck_sit/finger_lip/source/kling_duck_sit_finger_lip.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "duck_sit_idle"
+    },
+    "duck_sit_stretch": {
+      "id": "duck_sit_stretch",
+      "legacyId": "duck_sit_stretch",
+      "type": "state_variant",
+      "path": "assets/actions/states/duck_sit/stretch",
+      "sourceDir": "assets/actions/states/duck_sit/stretch/source",
+      "webmPath": "assets/actions/states/duck_sit/stretch/webm/duck_sit_stretch_loop.webm",
+      "fallbackPath": "assets/actions/states/duck_sit/stretch/keyframes/duck_sit_stretch_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/duck_sit/stretch/source/kling_duck_sit_stretch.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "duck_sit_idle"
+    },
+    "stand_to_duck_sit": {
+      "id": "stand_to_duck_sit",
+      "legacyId": "stand_to_duck_sit",
+      "type": "transition",
+      "path": "assets/actions/transitions/stand_to_duck_sit",
+      "sourceDir": "assets/actions/transitions/stand_to_duck_sit/source",
+      "webmPath": "assets/actions/transitions/stand_to_duck_sit/webm/stand_to_duck_sit_loop.webm",
+      "fallbackPath": "assets/actions/transitions/stand_to_duck_sit/keyframes/stand_to_duck_sit_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/transitions/stand_to_duck_sit/source/kling_stand_to_duck_sit.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "duck_sit_idle"
+    },
+    "duck_sit_to_stand": {
+      "id": "duck_sit_to_stand",
+      "legacyId": "duck_sit_to_stand",
+      "type": "transition",
+      "path": "assets/actions/transitions/duck_sit_to_stand",
+      "sourceDir": "assets/actions/transitions/duck_sit_to_stand/source",
+      "webmPath": "assets/actions/transitions/duck_sit_to_stand/webm/duck_sit_to_stand_loop.webm",
+      "fallbackPath": "assets/actions/transitions/duck_sit_to_stand/keyframes/duck_sit_to_stand_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/transitions/duck_sit_to_stand/source/kling_duck_sit_to_stand.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "idle"
+    },
+    "duck_sit_to_sleep": {
+      "id": "duck_sit_to_sleep",
+      "legacyId": "duck_sit_to_sleep",
+      "type": "transition",
+      "path": "assets/actions/transitions/duck_sit_to_sleep",
+      "sourceDir": "assets/actions/transitions/duck_sit_to_sleep/source",
+      "webmPath": "assets/actions/transitions/duck_sit_to_sleep/webm/duck_sit_to_sleep_loop.webm",
+      "fallbackPath": "assets/actions/transitions/duck_sit_to_sleep/keyframes/duck_sit_to_sleep_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/transitions/duck_sit_to_sleep/source/jianying_duck_sit_to_sleep.mov"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "sleep"
+    },
+    "sleep_to_stand": {
+      "id": "sleep_to_stand",
+      "legacyId": "sleep_to_stand",
+      "type": "transition",
+      "path": "assets/actions/transitions/sleep_to_stand",
+      "sourceDir": "assets/actions/transitions/sleep_to_stand/source",
+      "webmPath": "assets/actions/transitions/sleep_to_stand/webm/sleep_to_stand_loop.webm",
+      "fallbackPath": "assets/actions/transitions/sleep_to_stand/keyframes/sleep_to_stand_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/transitions/sleep_to_stand/source/kling_sleep_to_stand.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "idle"
+    },
+    "idle_yawn": {
+      "id": "idle_yawn",
+      "legacyId": "idle_yawn",
+      "type": "state_variant",
+      "path": "assets/actions/states/idle/yawn",
+      "sourceDir": "assets/actions/states/idle/yawn/source",
+      "webmPath": "assets/actions/states/idle/yawn/webm/idle_yawn_loop.webm",
+      "fallbackPath": "assets/actions/states/idle/yawn/keyframes/idle_yawn_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/idle/yawn/source/idle_yawn_jimeng.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "idle_hair": {
+      "id": "idle_hair",
+      "legacyId": "idle_hair",
+      "type": "state_variant",
+      "path": "assets/actions/states/idle/hair",
+      "sourceDir": "assets/actions/states/idle/hair/source",
+      "webmPath": "assets/actions/states/idle/hair/webm/idle_hair_loop.webm",
+      "fallbackPath": "assets/actions/states/idle/hair/keyframes/idle_hair_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/states/idle/hair/source/idle_hair_jimeng.mp4"
+      ],
+      "playback": "one_shot",
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "mouse_hover_look": {
+      "id": "mouse_hover_look",
+      "type": "interaction",
+      "path": "assets/actions/interactions/mouse_hover_look",
+      "sourceDir": "assets/actions/interactions/mouse_hover_look/source",
+      "webmPath": "assets/actions/interactions/mouse_hover_look/webm/mouse_hover_look_loop.webm",
+      "fallbackPath": "assets/actions/interactions/mouse_hover_look/keyframes/mouse_hover_look_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "mouse_leave_back": {
+      "id": "mouse_leave_back",
+      "type": "interaction",
+      "path": "assets/actions/interactions/mouse_leave_back",
+      "sourceDir": "assets/actions/interactions/mouse_leave_back/source",
+      "webmPath": "assets/actions/interactions/mouse_leave_back/webm/mouse_leave_back_loop.webm",
+      "fallbackPath": "assets/actions/interactions/mouse_leave_back/keyframes/mouse_leave_back_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "click_head_happy": {
+      "id": "click_head_happy",
+      "type": "interaction",
+      "path": "assets/actions/interactions/click_head_happy",
+      "sourceDir": "assets/actions/interactions/click_head_happy/source",
+      "webmPath": "assets/actions/interactions/click_head_happy/webm/click_head_happy_loop.webm",
+      "fallbackPath": "assets/actions/interactions/click_head_happy/keyframes/click_head_happy_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "click_body_confused": {
+      "id": "click_body_confused",
+      "type": "interaction",
+      "path": "assets/actions/interactions/click_body_confused",
+      "sourceDir": "assets/actions/interactions/click_body_confused/source",
+      "webmPath": "assets/actions/interactions/click_body_confused/webm/click_body_confused_loop.webm",
+      "fallbackPath": "assets/actions/interactions/click_body_confused/keyframes/click_body_confused_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "drag_start_lift": {
+      "id": "drag_start_lift",
+      "type": "interaction",
+      "path": "assets/actions/interactions/drag_start_lift",
+      "sourceDir": "assets/actions/interactions/drag_start_lift/source",
+      "webmPath": "assets/actions/interactions/drag_start_lift/webm/drag_start_lift_loop.webm",
+      "fallbackPath": "assets/actions/interactions/drag_start_lift/keyframes/drag_start_lift_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "drag_end_dizzy": {
+      "id": "drag_end_dizzy",
+      "type": "interaction",
+      "path": "assets/actions/interactions/drag_end_dizzy",
+      "sourceDir": "assets/actions/interactions/drag_end_dizzy/source",
+      "webmPath": "assets/actions/interactions/drag_end_dizzy/webm/drag_end_dizzy_loop.webm",
+      "fallbackPath": "assets/actions/interactions/drag_end_dizzy/keyframes/drag_end_dizzy_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "stand_to_reading": {
+      "id": "stand_to_reading",
+      "legacyId": "stand_to_reading",
+      "type": "transition",
+      "path": "assets/actions/transitions/stand_to_reading",
+      "sourceDir": "assets/actions/transitions/stand_to_reading/source",
+      "webmPath": "assets/actions/transitions/stand_to_reading/webm/stand_to_reading_loop.webm",
+      "fallbackPath": "assets/actions/transitions/stand_to_reading/keyframes/stand_to_reading_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "reading"
+    },
+    "reading_to_stand": {
+      "id": "reading_to_stand",
+      "legacyId": "reading_to_stand",
+      "type": "transition",
+      "path": "assets/actions/transitions/reading_to_stand",
+      "sourceDir": "assets/actions/transitions/reading_to_stand/source",
+      "webmPath": "assets/actions/transitions/reading_to_stand/webm/reading_to_stand_loop.webm",
+      "fallbackPath": "assets/actions/transitions/reading_to_stand/keyframes/reading_to_stand_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "stand_to_coding": {
+      "id": "stand_to_coding",
+      "legacyId": "stand_to_coding",
+      "type": "transition",
+      "path": "assets/actions/transitions/stand_to_coding",
+      "sourceDir": "assets/actions/transitions/stand_to_coding/source",
+      "webmPath": "assets/actions/transitions/stand_to_coding/webm/stand_to_coding_loop.webm",
+      "fallbackPath": "assets/actions/transitions/stand_to_coding/keyframes/stand_to_coding_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "coding"
+    },
+    "coding_to_stand": {
+      "id": "coding_to_stand",
+      "legacyId": "coding_to_stand",
+      "type": "transition",
+      "path": "assets/actions/transitions/coding_to_stand",
+      "sourceDir": "assets/actions/transitions/coding_to_stand/source",
+      "webmPath": "assets/actions/transitions/coding_to_stand/webm/coding_to_stand_loop.webm",
+      "fallbackPath": "assets/actions/transitions/coding_to_stand/keyframes/coding_to_stand_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "stand_to_thinking": {
+      "id": "stand_to_thinking",
+      "legacyId": "stand_to_thinking",
+      "type": "transition",
+      "path": "assets/actions/transitions/stand_to_thinking",
+      "sourceDir": "assets/actions/transitions/stand_to_thinking/source",
+      "webmPath": "assets/actions/transitions/stand_to_thinking/webm/stand_to_thinking_loop.webm",
+      "fallbackPath": "assets/actions/transitions/stand_to_thinking/keyframes/stand_to_thinking_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "thinking"
+    },
+    "thinking_to_stand": {
+      "id": "thinking_to_stand",
+      "legacyId": "thinking_to_stand",
+      "type": "transition",
+      "path": "assets/actions/transitions/thinking_to_stand",
+      "sourceDir": "assets/actions/transitions/thinking_to_stand/source",
+      "webmPath": "assets/actions/transitions/thinking_to_stand/webm/thinking_to_stand_loop.webm",
+      "fallbackPath": "assets/actions/transitions/thinking_to_stand/keyframes/thinking_to_stand_01.png",
+      "sourceVideoPaths": [],
+      "playback": "one_shot",
+      "runtime": false,
+      "available": false,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "fallback_idle": {
+      "id": "fallback_idle",
+      "legacyId": "idle",
+      "type": "fallback",
+      "path": "assets/actions/fallback/idle",
+      "sourceDir": "assets/actions/fallback/idle/source",
+      "webmPath": "assets/actions/fallback/idle/webm/idle_loop.webm",
+      "fallbackPath": "assets/actions/fallback/idle/keyframes/idle_01.png",
+      "sourceVideoPaths": [
+        "assets/actions/fallback/idle/source/idle_jimeng.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
+      "protect": true,
+      "returnTo": "idle"
+    }
+  }
+}

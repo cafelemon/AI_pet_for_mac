@@ -24,7 +24,7 @@ QUEUE = (
     "sleep",
     "idle_hair",
     "idle_yawn",
-    "idle_reading",
+    "reading",
     "reminder",
     "success",
     "duck_sit_head_hair",
@@ -38,8 +38,8 @@ QUEUE = (
 )
 RAW_QA_SOURCE_DIR = ROOT / "docs" / "pb2" / "qa" / "source_white"
 SLEEP_FAMILY_STATES = frozenset({"sleep", "duck_sit_to_sleep", "sleep_to_stand"})
-SLEEP_SHARED_MODEL_CACHE = ROOT / "assets" / "states" / "sleep" / "source" / ".matting_work" / "shared_model_cache"
-LEGACY_SHARED_MODEL_CACHE = ROOT / "assets" / "states" / "thinking" / "source" / ".matting_work" / "shared_model_cache"
+SLEEP_SHARED_MODEL_CACHE = pb2.source_dir("sleep") / ".matting_work" / "shared_model_cache"
+LEGACY_SHARED_MODEL_CACHE = pb2.source_dir("thinking") / ".matting_work" / "shared_model_cache"
 DEFAULT_MODEL = "isnet-general-use"
 SLEEP_FAMILY_MODEL = "birefnet-general"
 

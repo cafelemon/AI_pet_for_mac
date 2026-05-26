@@ -31,6 +31,7 @@ function encodeAssetPath(relativePath) {
 const companionAPI = {
   getCompanionConfig: () => electron.ipcRenderer.invoke("config:get-companion"),
   getStatesConfig: () => electron.ipcRenderer.invoke("config:get-states"),
+  getActionRegistryConfig: () => electron.ipcRenderer.invoke("config:get-action-registry"),
   assetUrl: (relativePath) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => electron.ipcRenderer.invoke("codex:get-runtime-state"),
   getReminderRuntimeState: () => electron.ipcRenderer.invoke("reminders:get-runtime-state"),

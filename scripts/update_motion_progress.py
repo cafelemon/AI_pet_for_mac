@@ -7,6 +7,8 @@ import argparse
 import json
 from pathlib import Path
 
+import action_registry
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "data" / "config" / "motion_catalog.config.json"
@@ -58,7 +60,7 @@ def source_info(action_id: str) -> dict[str, str | None]:
 def source_path(action_id: str) -> Path:
     directory = source_dir(action_id)
     info = source_info(action_id)
-    candidates: list[Path] = []
+    candidates: list[Path] = action_registry.source_video_paths(action_id)
     if info["sourceFile"]:
         candidates.append(directory / info["sourceFile"])
     candidates.extend(
@@ -84,11 +86,11 @@ def source_path(action_id: str) -> Path:
 
 
 def source_dir(action_id: str) -> Path:
-    return ROOT / "assets" / "states" / action_id / "source"
+    return action_registry.source_dir(action_id)
 
 
 def webm_path(action_id: str) -> Path:
-    return ROOT / "assets" / "webm" / action_id / f"{action_id}_loop.webm"
+    return action_registry.webm_path(action_id)
 
 
 def white_keyframe_dir(action_id: str) -> Path:

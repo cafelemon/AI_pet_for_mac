@@ -8,6 +8,7 @@ import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:pa
 import { pathToFileURL } from 'node:url';
 
 import type {
+  ActionRegistryConfig,
   CodexPluginConfig,
   CodexRenderState,
   CodexRuntimeState,
@@ -77,6 +78,7 @@ const CODEX_RUNTIME_STATES = new Set<CodexRuntimeStatus>([
 ]);
 const COMPANION_STATES = new Set([
   'idle',
+  'reading',
   'coding',
   'thinking',
   'waiting_auth',
@@ -215,6 +217,9 @@ function registerConfigHandlers(): void {
   );
   ipcMain.handle('config:get-states', () =>
     readJsonFile<StatesConfig>('data', 'config', 'states.config.json')
+  );
+  ipcMain.handle('config:get-action-registry', () =>
+    readJsonFile<ActionRegistryConfig>('data', 'config', 'action_registry.config.json')
   );
 }
 

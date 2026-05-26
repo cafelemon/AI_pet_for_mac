@@ -8,12 +8,12 @@ from pathlib import Path
 import struct
 import zlib
 
+import action_registry
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CANVAS_SIZE = (1536, 1728)
-KEYFRAME_ROOT = ROOT / "assets" / "keyframes"
 OUTPUT_ROOT = ROOT / "assets" / "character" / "reference" / "pb2_white_keyframes"
-STATE_ROOT = ROOT / "assets" / "states"
 WHITE = (255, 255, 255, 255)
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -50,7 +50,7 @@ ACTIONS = (
     ActionSpec(
         state="idle_yawn",
         source="idle_yawn/idle_yawn_01.png",
-        end_source="idle/idle_01.png",
+        end_source="idle",
         playback="one_shot",
         duration_seconds="3-4",
         action="站立打哈欠，结束回自然站姿",
@@ -59,15 +59,15 @@ ACTIONS = (
     ActionSpec(
         state="idle_hair",
         source="idle_hair/idle_hair_01.png",
-        end_source="idle/idle_01.png",
+        end_source="idle",
         playback="one_shot",
         duration_seconds="3-4",
         action="顺头发，结束回自然站姿",
         prompt="让角色轻轻顺一下头发，动作温柔自然，最后回到自然站姿。",
     ),
     ActionSpec(
-        state="idle_reading",
-        source="idle_reading/idle_reading_01.png",
+        state="reading",
+        source="reading/idle_reading_01.png",
         playback="loop",
         duration_seconds="4-5",
         action="侧坐看书，轻微翻页/眨眼",
@@ -100,7 +100,7 @@ ACTIONS = (
     ActionSpec(
         state="success",
         source="success/success_01.png",
-        end_source="idle/idle_01.png",
+        end_source="idle",
         playback="one_shot",
         duration_seconds="2-3",
         action="跳起来，小烟花爆开，落回站姿",
@@ -254,6 +254,8 @@ def compose_on_white(source: Path, output: Path) -> None:
 
 def write_prompt(action: ActionSpec, output_dir: Path) -> None:
     prompt_path = output_dir / f"{action.state}_jimeng_prompt.md"
+    source_dir = action_registry.source_dir(action.state)
+    webm_path = action_registry.webm_path(action.state)
     prompt_path.write_text(
         "\n".join(
             [
@@ -264,8 +266,8 @@ def write_prompt(action: ActionSpec, output_dir: Path) -> None:
                 f"- 播放类型：`{action.playback}`",
                 f"- 建议时长：{action.duration_seconds} 秒",
                 f"- 动作：{action.action}",
-                f"- 源视频放置：`assets/states/{action.state}/source/{action.state}_jimeng.mp4`",
-                f"- 最终 WebM：`assets/webm/{action.state}/{action.state}_loop.webm`",
+                f"- 源视频放置：`{source_dir.relative_to(ROOT)}`",
+                f"- 最终 WebM：`{webm_path.relative_to(ROOT)}`",
                 "",
                 "## 即梦提示词",
                 "",
@@ -288,7 +290,7 @@ def write_root_readme() -> None:
         "生成视频后，把文件放到对应目录：",
         "",
         "```text",
-        "assets/states/<state>/source/<state>_jimeng.mp4",
+        "assets/actions/<category>/<action>/source/",
         "```",
         "",
         "统一要求：纯白背景、固定镜头、主体完整、无阴影、无水印、无字幕、3-5 秒。",
@@ -297,8 +299,9 @@ def write_root_readme() -> None:
         "|---|---|---|",
     ]
     for action in ACTIONS:
+        source_dir = action_registry.source_dir(action.state)
         lines.append(
-            f"| `{action.state}` | `{action.playback}` | `assets/states/{action.state}/source/{action.state}_jimeng.mp4` |"
+            f"| `{action.state}` | `{action.playback}` | `{source_dir.relative_to(ROOT)}` |"
         )
     lines.append("")
     (OUTPUT_ROOT / "README.md").write_text("\n".join(lines), encoding="utf-8")
@@ -309,12 +312,12 @@ def main() -> int:
 
     for action in ACTIONS:
         output_dir = OUTPUT_ROOT / action.state
-        compose_on_white(KEYFRAME_ROOT / action.source, output_dir / f"{action.state}_start.png")
+        compose_on_white(action_registry.fallback_path(action.state), output_dir / f"{action.state}_start.png")
         if action.end_source:
-            compose_on_white(KEYFRAME_ROOT / action.end_source, output_dir / f"{action.state}_end.png")
+            compose_on_white(action_registry.fallback_path(action.end_source), output_dir / f"{action.state}_end.png")
         write_prompt(action, output_dir)
 
-        source_dir = STATE_ROOT / action.state / "source"
+        source_dir = action_registry.source_dir(action.state)
         source_dir.mkdir(parents=True, exist_ok=True)
         (source_dir / ".gitkeep").touch()
 

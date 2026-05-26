@@ -9,6 +9,8 @@ import { TaskPanel } from '../components/TaskPanel';
 import { buildKeyframes } from '../adapters/SequenceRenderer';
 import type { StatusActionGroup } from '../components/StatusPanel';
 import type {
+  ActionDefinition,
+  ActionRegistryConfig,
   CodexRenderState,
   CompanionConfig,
   CompanionState,
@@ -31,6 +33,7 @@ import type {
 
 const RENDER_STATES: CompanionState[] = [
   'idle',
+  'reading',
   'coding',
   'thinking',
   'waiting_auth',
@@ -41,6 +44,7 @@ const RENDER_STATES: CompanionState[] = [
 ];
 const STATE_LABELS: Record<CompanionState, string> = {
   idle: 'Idle',
+  reading: 'Reading',
   coding: 'Coding',
   thinking: 'Thinking',
   waiting_auth: 'Waiting Auth',
@@ -51,6 +55,7 @@ const STATE_LABELS: Record<CompanionState, string> = {
 };
 const BUBBLE_MESSAGES: Record<CompanionState, string | null> = {
   idle: null,
+  reading: '正在阅读',
   coding: '正在工作',
   thinking: '我在思考',
   waiting_auth: '需要你确认一下',
@@ -72,7 +77,7 @@ const DEFAULT_IDLE_MOTION = {
   enabled: true,
   minDelayMs: 30000,
   maxDelayMs: 60000,
-  variants: ['idle_yawn', 'idle_hair', 'idle_reading', 'coding', 'thinking'],
+  variants: ['idle_yawn', 'idle_hair', 'coding', 'thinking'],
   duckSitVariants: ['duck_sit_head_hair', 'duck_sit_finger_lip', 'duck_sit_stretch'],
   standToDuckSitProbability: 0.35,
   duckSitToStandProbability: 0.3
@@ -92,37 +97,7 @@ const THINKING_TO_STAND = 'thinking_to_stand';
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
 const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1000;
-const STATUS_ACTION_GROUPS: Array<{ label: string; folders: string[] }> = [
-  {
-    label: '核心状态',
-    folders: ['idle', 'coding', 'thinking', 'success', 'error', 'reminder']
-  },
-  {
-    label: '站立小动作',
-    folders: ['idle_yawn', 'idle_hair', 'idle_reading']
-  },
-  {
-    label: '鸭子坐',
-    folders: [DUCK_SIT_IDLE, 'duck_sit_head_hair', 'duck_sit_finger_lip', DUCK_SIT_STRETCH]
-  },
-  {
-    label: '姿态衔接',
-    folders: [
-      STAND_TO_DUCK_SIT,
-      DUCK_SIT_TO_STAND,
-      STAND_TO_READING,
-      READING_TO_STAND,
-      STAND_TO_CODING,
-      CODING_TO_STAND,
-      STAND_TO_THINKING,
-      THINKING_TO_STAND
-    ]
-  },
-  {
-    label: '睡眠相关',
-    folders: ['sleep', DUCK_SIT_TO_SLEEP, WAKE_FROM_SLEEP_TRANSITION]
-  }
-];
+const CONTROL_GROUP_ORDER = ['主状态', '站立小动作', '鸭子坐', '姿态衔接', '事件反馈', '用户交互'];
 const EMPTY_TASK_SNAPSHOT: TaskCenterSnapshot = {
   today: [],
   currentCodex: null,
@@ -161,7 +136,56 @@ function stateForActionFolder(folder: string): CompanionState {
   return folder === DUCK_SIT_TO_SLEEP || folder === WAKE_FROM_SLEEP_TRANSITION ? 'sleep' : 'idle';
 }
 
-function buildCompanionCatalog(keyframes: KeyframeDescriptor[], statesConfig: StatesConfig): CompanionCatalog {
+function controlGroupForAction(action: ActionDefinition): string | null {
+  if (!action.runtime || !action.available || action.type === 'fallback') {
+    return null;
+  }
+  if (action.type === 'event') {
+    return '事件反馈';
+  }
+  if (action.type === 'transition') {
+    return '姿态衔接';
+  }
+  if (action.type === 'interaction') {
+    return '用户交互';
+  }
+  if (action.path.includes('/states/duck_sit/')) {
+    return '鸭子坐';
+  }
+  if (action.type === 'state_variant') {
+    return '站立小动作';
+  }
+  return '主状态';
+}
+
+function buildActionGroups(
+  byFolder: Map<string, KeyframeDescriptor>,
+  actionRegistry: ActionRegistryConfig
+): StatusActionGroup[] {
+  const groups = new Map<string, KeyframeDescriptor[]>();
+
+  for (const actionId of actionRegistry.actionOrder) {
+    const action = actionRegistry.actions[actionId];
+    const keyframe = byFolder.get(actionId);
+    const group = action ? controlGroupForAction(action) : null;
+    if (!group || !keyframe) {
+      continue;
+    }
+
+    groups.set(group, [...(groups.get(group) ?? []), keyframe]);
+  }
+
+  return CONTROL_GROUP_ORDER.map((label) => ({
+    label,
+    actions: groups.get(label) ?? []
+  })).filter((group) => group.actions.length > 0);
+}
+
+function buildCompanionCatalog(
+  keyframes: KeyframeDescriptor[],
+  statesConfig: StatesConfig,
+  actionRegistry: ActionRegistryConfig
+): CompanionCatalog {
   const byFolder = new Map(keyframes.map((keyframe) => [keyframe.folder, keyframe]));
   const states = RENDER_STATES.filter(
     (state) => statesConfig.states.includes(state) && byFolder.has(keyframeFolderForState(state))
@@ -180,12 +204,7 @@ function buildCompanionCatalog(keyframes: KeyframeDescriptor[], statesConfig: St
     idleVariants: statesConfig.idleVariants
       .map((variant) => byFolder.get(variant))
       .filter((variant): variant is KeyframeDescriptor => Boolean(variant)),
-    actionGroups: STATUS_ACTION_GROUPS.map((group) => ({
-      label: group.label,
-      actions: group.folders
-        .map((folder) => byFolder.get(folder))
-        .filter((action): action is KeyframeDescriptor => Boolean(action))
-    })).filter((group) => group.actions.length > 0),
+    actionGroups: buildActionGroups(byFolder, actionRegistry),
     byFolder,
     byState
   };
@@ -279,22 +298,23 @@ function moduleFromSearch(): ControlCenterModule {
 
 function useCompanionCatalog(
   companionConfig: CompanionConfig | null,
-  statesConfig: StatesConfig | null
+  statesConfig: StatesConfig | null,
+  actionRegistry: ActionRegistryConfig | null
 ): { keyframes: KeyframeDescriptor[]; catalog: CompanionCatalog | null } {
   const keyframes = useMemo(() => {
-    if (!companionConfig || !statesConfig) {
+    if (!companionConfig || !statesConfig || !actionRegistry) {
       return [];
     }
 
-    return buildKeyframes(companionConfig, statesConfig);
-  }, [companionConfig, statesConfig]);
+    return buildKeyframes(companionConfig, statesConfig, actionRegistry);
+  }, [actionRegistry, companionConfig, statesConfig]);
   const catalog = useMemo(() => {
-    if (!statesConfig) {
+    if (!statesConfig || !actionRegistry) {
       return null;
     }
 
-    return buildCompanionCatalog(keyframes, statesConfig);
-  }, [keyframes, statesConfig]);
+    return buildCompanionCatalog(keyframes, statesConfig, actionRegistry);
+  }, [actionRegistry, keyframes, statesConfig]);
 
   return { keyframes, catalog };
 }
@@ -620,23 +640,26 @@ function PetRenderer({
 function PetApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
+  const [actionRegistry, setActionRegistry] = useState<ActionRegistryConfig | null>(null);
   const [manualSelection, setManualSelection] = useState<ManualRenderSelection | null>(null);
   const { codexState, reminderState, taskNotification } = useRuntimeState();
-  const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig);
+  const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
   useEffect(() => {
     let cancelled = false;
 
     async function load(): Promise<void> {
-      const [nextCompanionConfig, nextStatesConfig, nextSelection] = await Promise.all([
+      const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextSelection] = await Promise.all([
         window.companionAPI.getCompanionConfig(),
         window.companionAPI.getStatesConfig(),
+        window.companionAPI.getActionRegistryConfig(),
         window.companionAPI.getManualRenderSelection()
       ]);
 
       if (!cancelled) {
         setCompanionConfig(nextCompanionConfig);
         setStatesConfig(nextStatesConfig);
+        setActionRegistry(nextActionRegistry);
         setManualSelection(nextSelection);
       }
     }
@@ -764,13 +787,14 @@ function SettingsModule({
 function ControlCenterApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
+  const [actionRegistry, setActionRegistry] = useState<ActionRegistryConfig | null>(null);
   const [windowControls, setWindowControls] = useState<WindowControls>(DEFAULT_WINDOW_CONTROLS);
   const [manualSelection, setManualSelection] = useState<ManualRenderSelection | null>(null);
   const [activeModule, setActiveModule] = useState<ControlCenterModule>(moduleFromSearch);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<InputPermissionStatus>('unknown');
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
-  const { catalog } = useCompanionCatalog(companionConfig, statesConfig);
+  const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
   useEffect(() => {
     let cancelled = false;
@@ -779,6 +803,7 @@ function ControlCenterApp(): ReactElement | null {
       const [
         nextCompanionConfig,
         nextStatesConfig,
+        nextActionRegistry,
         nextWindowControls,
         nextSelection,
         nextShortcuts,
@@ -786,6 +811,7 @@ function ControlCenterApp(): ReactElement | null {
       ] = await Promise.all([
         window.companionAPI.getCompanionConfig(),
         window.companionAPI.getStatesConfig(),
+        window.companionAPI.getActionRegistryConfig(),
         window.companionAPI.getWindowControls(),
         window.companionAPI.getManualRenderSelection(),
         window.companionAPI.getShortcuts(),
@@ -795,6 +821,7 @@ function ControlCenterApp(): ReactElement | null {
       if (!cancelled) {
         setCompanionConfig(nextCompanionConfig);
         setStatesConfig(nextStatesConfig);
+        setActionRegistry(nextActionRegistry);
         setWindowControls(nextWindowControls);
         setManualSelection(nextSelection);
         setShortcuts(nextShortcuts);

@@ -29,6 +29,32 @@ export interface StatesConfig {
   priorities: Record<string, number>;
 }
 
+export interface ActionRegistryConfig {
+  version: number;
+  assetRoot: string;
+  fallbackAction: string;
+  actionOrder: string[];
+  actions: Record<string, ActionDefinition>;
+}
+
+export type ActionType = 'state' | 'state_variant' | 'transition' | 'event' | 'interaction' | 'fallback';
+
+export interface ActionDefinition {
+  id: string;
+  legacyId?: string;
+  type: ActionType;
+  path: string;
+  sourceDir: string;
+  webmPath: string;
+  fallbackPath: string;
+  sourceVideoPaths: string[];
+  playback: MotionPlayback;
+  runtime: boolean;
+  available: boolean;
+  protect: boolean;
+  returnTo: string;
+}
+
 export type MotionPlayback = 'loop' | 'one_shot';
 
 export interface MotionConfig {
@@ -73,6 +99,7 @@ export interface CodexPluginConfig {
 export interface CompanionAPI {
   getCompanionConfig: () => Promise<CompanionConfig>;
   getStatesConfig: () => Promise<StatesConfig>;
+  getActionRegistryConfig: () => Promise<ActionRegistryConfig>;
   assetUrl: (relativePath: string) => string;
   getCodexRuntimeState: () => Promise<CodexRenderState | null>;
   getReminderRuntimeState: () => Promise<ReminderNotification | null>;
@@ -133,6 +160,7 @@ export type CompanionCommand =
 
 export type CompanionState =
   | 'idle'
+  | 'reading'
   | 'coding'
   | 'thinking'
   | 'waiting_auth'

@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "enabled": false,
+  "rules": {
+    "mouse_hover": {
+      "action": "mouse_hover_look",
+      "cooldownMs": 8000,
+      "interruptLevel": "low",
+      "returnToPrevious": true
+    },
+    "mouse_leave": {
+      "action": "mouse_leave_back",
+      "cooldownMs": 3000,
+      "interruptLevel": "low",
+      "returnToPrevious": true
+    },
+    "click_head": {
+      "action": "click_head_happy",
+      "cooldownMs": 3000,
+      "interruptLevel": "medium",
+      "returnToPrevious": true
+    },
+    "click_body": {
+      "action": "click_body_confused",
+      "cooldownMs": 3000,
+      "interruptLevel": "medium",
+      "returnToPrevious": true
+    },
+    "drag_start": {
+      "action": "drag_start_lift",
+      "cooldownMs": 0,
+      "interruptLevel": "high",
+      "returnToPrevious": false
+    },
+    "drag_end": {
+      "action": "drag_end_dizzy",
+      "cooldownMs": 0,
+      "interruptLevel": "high",
+      "returnTo": "idle"
+    }
+  },
+  "guards": {
+    "sleep": {
+      "allow": [
+        "click_head",
+        "click_body",
+        "drag_start",
+        "drag_end"
+      ],
+      "block": [
+        "mouse_hover",
+        "mouse_leave"
+      ]
+    },
+    "transition": {
+      "blockInterruptLevels": [
+        "low"
+      ]
+    },
+    "event": {
+      "blockInterruptLevels": [
+        "low",
+        "medium"
+      ]
+    }
+  }
+}

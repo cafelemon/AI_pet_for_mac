@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { IpcRendererEvent } from 'electron';
 
 import type {
+  ActionRegistryConfig,
   CodexRenderState,
   CompanionAPI,
   CompanionCommand,
@@ -62,6 +63,8 @@ function encodeAssetPath(relativePath: string): string {
 const companionAPI: CompanionAPI = {
   getCompanionConfig: () => ipcRenderer.invoke('config:get-companion') as Promise<CompanionConfig>,
   getStatesConfig: () => ipcRenderer.invoke('config:get-states') as Promise<StatesConfig>,
+  getActionRegistryConfig: () =>
+    ipcRenderer.invoke('config:get-action-registry') as Promise<ActionRegistryConfig>,
   assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => ipcRenderer.invoke('codex:get-runtime-state') as Promise<CodexRenderState | null>,
   getReminderRuntimeState: () =>

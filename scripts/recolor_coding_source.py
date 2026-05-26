@@ -7,10 +7,12 @@ import argparse
 import subprocess
 from pathlib import Path
 
+import action_registry
+
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SOURCE = ROOT / "assets" / "states" / "coding" / "source" / "coding_jimeng.mp4"
-DEFAULT_OUTPUT = ROOT / "assets" / "states" / "coding" / "source" / "coding_jimeng_recolored.mp4"
+DEFAULT_SOURCE = action_registry.source_dir("coding") / "coding_jimeng.mp4"
+DEFAULT_OUTPUT = action_registry.source_dir("coding") / "coding_jimeng_recolored.mp4"
 
 
 def run(command: list[str]) -> None:

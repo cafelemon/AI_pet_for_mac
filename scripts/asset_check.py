@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate PA0 keyframes and optional PB1 WebM loop assets."""
+"""Validate action-registry keyframes and transparent WebM loop assets."""
 
 from __future__ import annotations
 
@@ -9,41 +9,34 @@ import re
 import struct
 from pathlib import Path
 
+import action_registry
+
 
 ROOT = Path(__file__).resolve().parents[1]
-KEYFRAME_ROOT = ROOT / "assets" / "keyframes"
-WEBM_ROOT = ROOT / "assets" / "webm"
 STATES_CONFIG_PATH = ROOT / "data" / "config" / "states.config.json"
 CANVAS_SIZE = (1536, 1728)
-BASE_STATES = (
-    "idle",
-    "coding",
-    "thinking",
-    "success",
-    "error",
-    "reminder",
-    "sleep",
-)
-IDLE_VARIANTS = (
-    "idle_reading",
-    "idle_yawn",
-    "idle_hair",
-)
-KEYFRAME_FOLDERS = BASE_STATES + IDLE_VARIANTS
 NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_(?P<index>\d{2})\.(png|webp)$")
 WEBM_NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_loop\.webm$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
-def configured_render_folders() -> tuple[str, ...]:
+def configured_render_actions() -> tuple[str, ...]:
     if not STATES_CONFIG_PATH.exists():
-        return KEYFRAME_FOLDERS
+        return action_registry.action_ids()
 
     config = json.loads(STATES_CONFIG_PATH.read_text(encoding="utf-8"))
-    folders = config.get("pa0KeyframeFolders")
-    if not isinstance(folders, list):
-        return KEYFRAME_FOLDERS
-    return tuple(str(folder) for folder in folders)
+    action_ids = config.get("pa0KeyframeFolders")
+    if not isinstance(action_ids, list):
+        return action_registry.action_ids()
+    return tuple(str(action_id) for action_id in action_ids)
+
+
+def allowed_names(action: dict[str, object]) -> set[str]:
+    names = {str(action["id"])}
+    legacy_id = action.get("legacyId")
+    if isinstance(legacy_id, str) and legacy_id:
+        names.add(legacy_id)
+    return names
 
 
 def read_png_info(path: Path) -> tuple[int, int, bool]:
@@ -65,94 +58,109 @@ def read_png_info(path: Path) -> tuple[int, int, bool]:
                 raise ValueError("missing PNG IHDR chunk")
 
 
-def check_webm_assets(webm_strict: bool, failures: list[str], warnings: list[str]) -> None:
-    if not WEBM_ROOT.exists():
-        message = f"missing PB1 WebM root: {WEBM_ROOT.relative_to(ROOT)}"
-        if webm_strict:
+def check_webm_assets(
+    action_id: str,
+    action: dict[str, object],
+    webm_strict: bool,
+    failures: list[str],
+    warnings: list[str],
+) -> None:
+    expected_webm = action_registry.webm_path(action_id)
+    webm_dir = expected_webm.parent
+    is_available = bool(action.get("available"))
+
+    if not webm_dir.exists():
+        message = f"missing WebM directory: {webm_dir.relative_to(ROOT)}"
+        if webm_strict and is_available:
             failures.append(message)
+        else:
+            warnings.append(message)
+        return
+    if not webm_dir.is_dir():
+        failures.append(f"WebM path is not a directory: {webm_dir.relative_to(ROOT)}")
         return
 
-    expected_folders = configured_render_folders()
+    webms = sorted(path for path in webm_dir.iterdir() if path.suffix.lower() == ".webm")
+    if webm_strict and is_available and expected_webm not in webms:
+        failures.append(f"missing loop WebM: {expected_webm.relative_to(ROOT)}")
 
-    for folder in expected_folders:
-        state_dir = WEBM_ROOT / folder
-        expected_loop = state_dir / f"{folder}_loop.webm"
-
-        if not state_dir.exists():
-            if webm_strict:
-                failures.append(f"missing PB1 WebM directory: {state_dir.relative_to(ROOT)}")
+    names = allowed_names(action)
+    for webm in webms:
+        match = WEBM_NAME_PATTERN.match(webm.name)
+        if not match or match.group("state") not in names:
+            failures.append(f"invalid WebM name: {webm.relative_to(ROOT)}")
             continue
-        if not state_dir.is_dir():
-            failures.append(f"PB1 WebM path is not a directory: {state_dir.relative_to(ROOT)}")
+        if webm.stat().st_size == 0:
+            failures.append(f"empty WebM asset: {webm.relative_to(ROOT)}")
+
+
+def check_keyframes(
+    action_id: str,
+    action: dict[str, object],
+    strict: bool,
+    failures: list[str],
+    warnings: list[str],
+) -> None:
+    keyframe_dir = action_registry.keyframe_dir(action_id)
+    is_available = bool(action.get("available"))
+
+    if not keyframe_dir.is_dir():
+        message = f"missing keyframe directory: {keyframe_dir.relative_to(ROOT)}"
+        if strict and is_available:
+            failures.append(message)
+        else:
+            warnings.append(message)
+        return
+
+    keyframes = sorted(path for path in keyframe_dir.iterdir() if path.suffix.lower() in {".png", ".webp"})
+    if not keyframes:
+        message = f"no keyframes found: {keyframe_dir.relative_to(ROOT)}"
+        if strict and is_available:
+            failures.append(message)
+        else:
+            warnings.append(message)
+        return
+
+    names = allowed_names(action)
+    for keyframe in keyframes:
+        match = NAME_PATTERN.match(keyframe.name)
+        if not match or match.group("state") not in names:
+            failures.append(f"invalid keyframe name: {keyframe.relative_to(ROOT)}")
             continue
 
-        webms = sorted(path for path in state_dir.iterdir() if path.suffix.lower() == ".webm")
-        if webm_strict and expected_loop not in webms:
-            failures.append(f"missing PB1 loop WebM: {expected_loop.relative_to(ROOT)}")
-
-        for webm in webms:
-            match = WEBM_NAME_PATTERN.match(webm.name)
-            if not match or match.group("state") != folder:
-                failures.append(f"invalid PB1 WebM name: {webm.relative_to(ROOT)}")
+        if strict and keyframe.suffix.lower() == ".png":
+            try:
+                width, height, has_alpha = read_png_info(keyframe)
+            except ValueError as exc:
+                failures.append(f"invalid PNG: {keyframe.relative_to(ROOT)} ({exc})")
                 continue
-            if webm.stat().st_size == 0:
-                failures.append(f"empty PB1 WebM asset: {webm.relative_to(ROOT)}")
 
-    for directory in sorted(path for path in WEBM_ROOT.iterdir() if path.is_dir()):
-        if directory.name not in expected_folders:
-            warnings.append(f"unexpected PB1 WebM directory: {directory.relative_to(ROOT)}")
+            if (width, height) != CANVAS_SIZE:
+                failures.append(
+                    "invalid PNG size: "
+                    f"{keyframe.relative_to(ROOT)} is {width}x{height}, "
+                    f"expected {CANVAS_SIZE[0]}x{CANVAS_SIZE[1]}"
+                )
+            if not has_alpha:
+                failures.append(f"missing PNG alpha channel: {keyframe.relative_to(ROOT)}")
 
 
 def check_assets(strict: bool, webm_strict: bool) -> int:
     failures: list[str] = []
     warnings: list[str] = []
+    actions = action_registry.load_actions()
 
-    expected_folders = configured_render_folders()
-
-    for folder in expected_folders:
-        state_dir = KEYFRAME_ROOT / folder
-        if not state_dir.is_dir():
-            failures.append(f"missing directory: {state_dir.relative_to(ROOT)}")
+    for action_id in configured_render_actions():
+        action = actions.get(action_id)
+        if not action:
+            failures.append(f"render action is missing from registry: {action_id}")
+            continue
+        if not action.get("runtime"):
+            warnings.append(f"render action is not runtime-enabled: {action_id}")
             continue
 
-        keyframes = sorted(
-            path for path in state_dir.iterdir() if path.suffix.lower() in {".png", ".webp"}
-        )
-        if not keyframes:
-            message = f"no keyframes found: {state_dir.relative_to(ROOT)}"
-            if strict:
-                failures.append(message)
-            else:
-                warnings.append(message)
-            continue
-
-        for keyframe in keyframes:
-            match = NAME_PATTERN.match(keyframe.name)
-            if not match or match.group("state") != folder:
-                failures.append(f"invalid keyframe name: {keyframe.relative_to(ROOT)}")
-                continue
-
-            if strict and keyframe.suffix.lower() == ".png":
-                try:
-                    width, height, has_alpha = read_png_info(keyframe)
-                except ValueError as exc:
-                    failures.append(f"invalid PNG: {keyframe.relative_to(ROOT)} ({exc})")
-                    continue
-
-                if (width, height) != CANVAS_SIZE:
-                    failures.append(
-                        "invalid PNG size: "
-                        f"{keyframe.relative_to(ROOT)} is {width}x{height}, "
-                        f"expected {CANVAS_SIZE[0]}x{CANVAS_SIZE[1]}"
-                    )
-                if not has_alpha:
-                    failures.append(f"missing PNG alpha channel: {keyframe.relative_to(ROOT)}")
-
-    for directory in sorted(path for path in KEYFRAME_ROOT.iterdir() if path.is_dir()):
-        if directory.name not in expected_folders:
-            warnings.append(f"unexpected keyframe directory: {directory.relative_to(ROOT)}")
-
-    check_webm_assets(webm_strict, failures, warnings)
+        check_keyframes(action_id, action, strict, failures, warnings)
+        check_webm_assets(action_id, action, webm_strict, failures, warnings)
 
     for warning in warnings:
         print(f"WARN: {warning}")
@@ -162,21 +170,21 @@ def check_assets(strict: bool, webm_strict: bool) -> int:
     if failures:
         return 1
 
-    print("PA0/PB1 asset layout check passed.")
+    print("Action registry asset layout check passed.")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Validate PA0 keyframe assets.")
+    parser = argparse.ArgumentParser(description="Validate action registry assets.")
     parser.add_argument(
         "--strict",
         action="store_true",
-        help="Require at least one PNG/WebP keyframe in every state directory.",
+        help="Require at least one PNG/WebP keyframe in every available runtime action directory.",
     )
     parser.add_argument(
         "--webm-strict",
         action="store_true",
-        help="Require a non-empty PB1 <state>_loop.webm file in every render folder.",
+        help="Require a non-empty loop WebM file for every available runtime action.",
     )
     args = parser.parse_args()
     return check_assets(strict=args.strict, webm_strict=args.webm_strict)
