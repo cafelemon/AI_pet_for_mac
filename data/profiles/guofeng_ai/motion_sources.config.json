@@ -1,0 +1,278 @@
+{
+  "defaults": {
+    "provider": "guofeng_ai",
+    "sourceFile": null,
+    "maskPreset": "none",
+    "mattePreset": "blue_screen",
+    "cropPreset": "none",
+    "layoutPreset": null
+  },
+  "sources": {
+    "idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "idle_stand.mp4",
+      "maskPreset": "doubao_ai_dynamic",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "guofeng_standing"
+    },
+    "idle_cross_arm": {
+      "provider": "guofeng_ai",
+      "sourceFile": "idle_cross_arm.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "reading": {
+      "provider": "guofeng_ai",
+      "sourceFile": "reading_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "coding": {
+      "provider": "guofeng_ai",
+      "sourceFile": "coding_scripture.mp4",
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "guofeng_work_small"
+    },
+    "thinking": {
+      "provider": "guofeng_ai",
+      "sourceFile": "thinking_idle.mp4",
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "guofeng_recline_small"
+    },
+    "success": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "error": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "reminder": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "sleep": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sleep_idle.mp4",
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "guofeng_prop_sleep_small"
+    },
+    "duck_sit_idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sit_duck_idle.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "sit_split_cross_arm_idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sit_split_cross_arm_idle.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "sit_hug_knee_idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sit_hug_knee_idle.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "duck_sit_head_hair": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "duck_sit_finger_lip": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "duck_sit_stretch": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "stand_to_duck_sit": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "duck_sit_to_stand": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "duck_sit_to_sleep": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "sleep_to_stand": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "idle_yawn": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "idle_hair": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "mouse_hover_look": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "mouse_leave_back": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "click_head_happy": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "click_body_confused": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "drag_start_lift": {
+      "provider": "guofeng_ai",
+      "sourceFile": "drag_start_lift_source.mp4",
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "drag_end_dizzy": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "stand_to_reading": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "reading_to_stand": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "stand_to_coding": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "coding_to_stand": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "stand_to_thinking": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "thinking_to_stand": {
+      "provider": "guofeng_ai",
+      "sourceFile": null,
+      "maskPreset": "none",
+      "mattePreset": "white"
+    },
+    "stand_to_cross_arm": {
+      "provider": "guofeng_ai",
+      "sourceFile": "stand_to_cross_arm.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "drag_hold_lift": {
+      "provider": "guofeng_ai",
+      "sourceFile": "drag_hold_lift.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "bath_idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "bath_idle.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "sword_flight_idle": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sword_flight_idle.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "stand_to_sword_flight": {
+      "provider": "guofeng_ai",
+      "sourceFile": "stand_to_sword_flight.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "stand_to_sword_dance": {
+      "provider": "guofeng_ai",
+      "sourceFile": "stand_to_sword_dance.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "sword_dance_to_sword_rain": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sword_dance_to_sword_rain.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    },
+    "sit_to_talisman_cast": {
+      "provider": "guofeng_ai",
+      "sourceFile": "sit_to_talisman_cast.mp4",
+      "maskPreset": "none",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "state": "drag_hold_lift",
+  "alpha_bbox": {
+    "x1": 326,
+    "y1": 101,
+    "x2": 1158,
+    "y2": 1535,
+    "width": 833,
+    "height": 1435
+  },
+  "main_component": {
+    "x1": 326,
+    "y1": 101,
+    "x2": 1157,
+    "y2": 1535,
+    "width": 832,
+    "height": 1435,
+    "area": 457949
+  },
+  "foreground_pixels": 458383,
+  "blue_residual_pixels": 14002,
+  "blue_residual_ratio": 0.03054650805112755
+}

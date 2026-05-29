@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "defaultProfileId": "legacy_real",
+  "profiles": {
+    "legacy_real": {
+      "id": "legacy_real",
+      "label": "真人桌宠",
+      "description": "当前已完成的真人桌宠素材包，保留原路径和运行时配置。",
+      "companionConfigPath": "data/config/companion.config.json",
+      "statesConfigPath": "data/config/states.config.json",
+      "actionRegistryPath": "data/config/action_registry.config.json",
+      "motionCatalogPath": "data/config/motion_catalog.config.json",
+      "motionSourcesPath": "data/config/motion_sources.config.json",
+      "actionProgressPath": "docs/generated/profiles/legacy_real/action_progress.md",
+      "qaRoot": "docs/generated/profiles/legacy_real/qa",
+      "assetRoot": "assets/actions",
+      "requiredAction": "idle",
+      "locked": true
+    },
+    "guofeng_ai": {
+      "id": "guofeng_ai",
+      "label": "古风 AI 角色",
+      "description": "新的古风 AI 角色桌宠素材库，等待源视频逐步填充。",
+      "companionConfigPath": "data/profiles/guofeng_ai/companion.config.json",
+      "statesConfigPath": "data/profiles/guofeng_ai/states.config.json",
+      "actionRegistryPath": "data/profiles/guofeng_ai/action_registry.config.json",
+      "motionCatalogPath": "data/profiles/guofeng_ai/motion_catalog.config.json",
+      "motionSourcesPath": "data/profiles/guofeng_ai/motion_sources.config.json",
+      "actionProgressPath": "docs/generated/profiles/guofeng_ai/action_progress.md",
+      "qaRoot": "docs/generated/profiles/guofeng_ai/qa",
+      "assetRoot": "assets/profiles/guofeng_ai/actions",
+      "requiredAction": "idle",
+      "locked": false
+    }
+  }
+}

@@ -1,0 +1,239 @@
+{
+  "states": [
+    "idle",
+    "reading",
+    "coding",
+    "thinking",
+    "waiting_auth",
+    "success",
+    "error",
+    "reminder",
+    "sleep"
+  ],
+  "idleVariants": [
+    "idle_cross_arm",
+    "stand_to_cross_arm",
+    "bath_idle",
+    "sword_flight_idle",
+    "stand_to_sword_flight",
+    "stand_to_sword_dance",
+    "sword_dance_to_sword_rain",
+    "sit_to_talisman_cast"
+  ],
+  "idleMotion": {
+    "enabled": true,
+    "minDelayMs": 30000,
+    "maxDelayMs": 60000,
+    "variants": [
+      "idle_cross_arm",
+      "stand_to_cross_arm",
+      "coding",
+      "thinking",
+      "bath_idle",
+      "sword_flight_idle",
+      "stand_to_sword_flight",
+      "stand_to_sword_dance",
+      "sword_dance_to_sword_rain",
+      "sit_to_talisman_cast"
+    ],
+    "duckSitVariants": [
+      "sit_split_cross_arm_idle",
+      "sit_hug_knee_idle"
+    ],
+    "standToDuckSitProbability": 0.35,
+    "duckSitToStandProbability": 0.3
+  },
+  "motions": {
+    "idle": {
+      "playback": "loop",
+      "durationMs": 5056,
+      "idleWeight": 1
+    },
+    "coding": {
+      "playback": "loop",
+      "durationMs": 6042,
+      "idleWeight": 1
+    },
+    "thinking": {
+      "playback": "loop",
+      "durationMs": 3042,
+      "idleWeight": 1
+    },
+    "success": {
+      "playback": "one_shot",
+      "durationMs": 6040
+    },
+    "error": {
+      "playback": "one_shot",
+      "durationMs": 5040
+    },
+    "reminder": {
+      "playback": "one_shot",
+      "durationMs": 5040
+    },
+    "sleep": {
+      "playback": "loop",
+      "durationMs": 5056,
+      "idleWeight": 1
+    },
+    "sleep_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 15750
+    },
+    "duck_sit_idle": {
+      "playback": "loop",
+      "durationMs": 5056,
+      "idleWeight": 1
+    },
+    "duck_sit_head_hair": {
+      "playback": "one_shot",
+      "durationMs": 10040,
+      "idleWeight": 1
+    },
+    "duck_sit_finger_lip": {
+      "playback": "one_shot",
+      "durationMs": 4040,
+      "idleWeight": 1
+    },
+    "duck_sit_stretch": {
+      "playback": "one_shot",
+      "durationMs": 6040,
+      "idleWeight": 1
+    },
+    "stand_to_duck_sit": {
+      "playback": "one_shot",
+      "durationMs": 7040
+    },
+    "duck_sit_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5040
+    },
+    "duck_sit_to_sleep": {
+      "playback": "one_shot",
+      "durationMs": 14210
+    },
+    "stand_to_reading": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "reading_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "stand_to_coding": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "coding_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "stand_to_thinking": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "thinking_to_stand": {
+      "playback": "one_shot",
+      "durationMs": 5000
+    },
+    "reading": {
+      "playback": "loop",
+      "durationMs": 10040,
+      "idleWeight": 1
+    },
+    "idle_yawn": {
+      "playback": "one_shot",
+      "durationMs": 5040,
+      "idleWeight": 1
+    },
+    "idle_hair": {
+      "playback": "one_shot",
+      "durationMs": 5040,
+      "idleWeight": 1
+    },
+    "idle_cross_arm": {
+      "playback": "loop",
+      "durationMs": 3042,
+      "idleWeight": 1
+    },
+    "sit_split_cross_arm_idle": {
+      "playback": "loop",
+      "durationMs": 5056,
+      "idleWeight": 1
+    },
+    "sit_hug_knee_idle": {
+      "playback": "loop",
+      "durationMs": 5056,
+      "idleWeight": 1
+    },
+    "stand_to_cross_arm": {
+      "playback": "one_shot",
+      "durationMs": 3042,
+      "idleWeight": 0.65
+    },
+    "drag_hold_lift": {
+      "playback": "loop",
+      "durationMs": 4042,
+      "idleWeight": 0
+    },
+    "bath_idle": {
+      "playback": "loop",
+      "durationMs": 10080,
+      "idleWeight": 0.45
+    },
+    "sword_flight_idle": {
+      "playback": "loop",
+      "durationMs": 5042,
+      "idleWeight": 0.55
+    },
+    "stand_to_sword_flight": {
+      "playback": "one_shot",
+      "durationMs": 4042,
+      "idleWeight": 0.35
+    },
+    "stand_to_sword_dance": {
+      "playback": "one_shot",
+      "durationMs": 4042,
+      "idleWeight": 0.35
+    },
+    "sword_dance_to_sword_rain": {
+      "playback": "one_shot",
+      "durationMs": 5042,
+      "idleWeight": 0.3
+    },
+    "sit_to_talisman_cast": {
+      "playback": "one_shot",
+      "durationMs": 4042,
+      "idleWeight": 0.3
+    }
+  },
+  "pa0KeyframeFolders": [
+    "idle",
+    "idle_cross_arm",
+    "stand_to_cross_arm",
+    "coding",
+    "thinking",
+    "bath_idle",
+    "sword_flight_idle",
+    "sleep",
+    "duck_sit_idle",
+    "sit_split_cross_arm_idle",
+    "sit_hug_knee_idle",
+    "stand_to_sword_flight",
+    "stand_to_sword_dance",
+    "sword_dance_to_sword_rain",
+    "sit_to_talisman_cast",
+    "drag_hold_lift"
+  ],
+  "priorities": {
+    "waiting_auth": 0,
+    "error": 1,
+    "reminder": 2,
+    "coding": 3,
+    "thinking": 4,
+    "success": 5,
+    "reading": 6,
+    "sleep": 7,
+    "idle": 8
+  }
+}

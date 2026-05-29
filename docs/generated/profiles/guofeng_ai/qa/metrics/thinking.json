@@ -1,0 +1,27 @@
+{
+  "state": "thinking",
+  "alpha_bbox": {
+    "x1": 351,
+    "y1": 1154,
+    "x2": 1184,
+    "y2": 1668,
+    "width": 834,
+    "height": 515
+  },
+  "main_component": {
+    "x1": 351,
+    "y1": 1154,
+    "x2": 1184,
+    "y2": 1668,
+    "width": 834,
+    "height": 515,
+    "area": 233007
+  },
+  "foreground_pixels": 233007,
+  "blue_residual_pixels": 2732,
+  "blue_residual_ratio": 0.011724969636105352,
+  "edge_foreground_pixels": 92570,
+  "edge_blue_residual_pixels": 2339,
+  "edge_blue_residual_ratio": 0.025267365237117857,
+  "low_alpha_blue_residual_pixels": 896
+}

@@ -2,7 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, net, protocol, screen, shell } from 
 import type { MenuItemConstructorOptions, Rectangle } from 'electron';
 import { existsSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -31,6 +31,10 @@ import type {
   TaskStatus,
   MouseHitRegion,
   MouseMode,
+  PetProfileConfig,
+  PetProfileDefinition,
+  PetProfileState,
+  PetProfileSummary,
   WindowControls
 } from '../shared/types';
 import { MacInputService } from './macInput';
@@ -49,9 +53,11 @@ const TASK_NOTIFICATION_CHANNEL = 'task:notification';
 const TASKS_UPDATED_CHANNEL = 'task:updated';
 const MOUSE_HIT_TEST_SAMPLE_CHANNEL = 'mouse:hit-test-sample';
 const MANUAL_RENDER_SELECTION_CHANNEL = 'render:manual-selection';
+const PET_PROFILE_CHANGED_CHANNEL = 'pet-profile:changed';
 const CONTROL_CENTER_MODULE_CHANNEL = 'control-center:module';
 const SHORTCUTS_UPDATED_CHANNEL = 'shortcuts:updated';
 const INPUT_PERMISSION_STATUS_CHANNEL = 'input-permission:status';
+const INTERACTION_DRAG_ACTIVE_CHANNEL = 'interaction:drag-active';
 const MAX_MOUSE_HIT_REGIONS = 2400;
 const CONTROL_CENTER_WIDTH = 420;
 const CONTROL_CENTER_HEIGHT = 560;
@@ -127,6 +133,7 @@ function resolveProjectRoot(): string {
 }
 
 const projectRoot = resolveProjectRoot();
+let activeProfileId = 'legacy_real';
 let activeCompanionConfig: CompanionConfig | null = null;
 let mainWindowRef: BrowserWindow | null = null;
 let controlCenterWindowRef: BrowserWindow | null = null;
@@ -152,6 +159,7 @@ let shortcutService: ShortcutService | null = null;
 let macInputService: MacInputService | null = null;
 let macInputPermissionStatus: InputPermissionStatus = process.platform === 'darwin' ? 'unknown' : 'denied';
 let macInputDragPoint: { x: number; y: number } | null = null;
+let macInputDragging = false;
 let lastMouseHitCanInteract = false;
 let mouseHitRegions: Rectangle[] = [];
 let windowDragActive = false;
@@ -165,6 +173,155 @@ function resolveProjectPath(...segments: string[]): string {
 async function readJsonFile<T>(...segments: string[]): Promise<T> {
   const raw = await readFile(resolveProjectPath(...segments), 'utf8');
   return JSON.parse(raw) as T;
+}
+
+async function readJsonPath<T>(path: string): Promise<T> {
+  const raw = await readFile(path, 'utf8');
+  return JSON.parse(raw) as T;
+}
+
+function resolveProfilePath(path: string): string {
+  return isAbsolute(path) ? path : resolveProjectPath(path);
+}
+
+async function loadPetProfileConfig(): Promise<PetProfileConfig> {
+  return readJsonFile<PetProfileConfig>('data', 'config', 'pet_profiles.config.json');
+}
+
+function defaultPetProfileId(config: PetProfileConfig): string {
+  return config.defaultProfileId || 'legacy_real';
+}
+
+function profileDefinition(config: PetProfileConfig, profileId: string): PetProfileDefinition {
+  const profile = config.profiles[profileId] ?? config.profiles[defaultPetProfileId(config)];
+  if (!profile) {
+    throw new Error('No usable pet profile is configured.');
+  }
+  return profile;
+}
+
+function hasRenderableActionAssets(action: { webmPath: string; fallbackPath: string }): boolean {
+  return existsSync(resolveProfilePath(action.webmPath)) && existsSync(resolveProfilePath(action.fallbackPath));
+}
+
+function materializeRegistryAvailability(
+  profile: PetProfileDefinition,
+  registry: ActionRegistryConfig
+): ActionRegistryConfig {
+  if (profile.locked) {
+    return registry;
+  }
+
+  const nextRegistry = structuredClone(registry);
+  for (const action of Object.values(nextRegistry.actions)) {
+    action.available = Boolean(action.runtime && hasRenderableActionAssets(action));
+  }
+  return nextRegistry;
+}
+
+async function readProfileJson<T>(profile: PetProfileDefinition, key: keyof PetProfileDefinition): Promise<T> {
+  const value = profile[key];
+  if (typeof value !== 'string') {
+    throw new Error(`Profile ${profile.id} is missing ${String(key)}.`);
+  }
+  return readJsonPath<T>(resolveProfilePath(value));
+}
+
+function profileStatePath(): string {
+  return join(app.getPath('userData'), 'pet-profile-state.json');
+}
+
+async function saveSelectedProfile(): Promise<void> {
+  const settingsPath = profileStatePath();
+  await mkdir(dirname(settingsPath), { recursive: true });
+  await writeFile(settingsPath, JSON.stringify({ profileId: activeProfileId }, null, 2) + '\n', 'utf8');
+}
+
+async function loadSelectedProfile(): Promise<void> {
+  try {
+    const payload = await readJsonPath<{ profileId?: unknown }>(profileStatePath());
+    if (typeof payload.profileId === 'string') {
+      activeProfileId = payload.profileId;
+    }
+  } catch {
+    activeProfileId = 'legacy_real';
+  }
+}
+
+async function profileReady(profile: PetProfileDefinition): Promise<boolean> {
+  for (const key of ['companionConfigPath', 'statesConfigPath', 'actionRegistryPath'] as const) {
+    if (!existsSync(resolveProfilePath(profile[key]))) {
+      return false;
+    }
+  }
+
+  try {
+    const registry = await readProfileJson<ActionRegistryConfig>(profile, 'actionRegistryPath');
+    const requiredAction = registry.actions[profile.requiredAction];
+    return Boolean(requiredAction && hasRenderableActionAssets(requiredAction));
+  } catch {
+    return false;
+  }
+}
+
+async function summarizeProfile(profile: PetProfileDefinition): Promise<PetProfileSummary> {
+  const ready = await profileReady(profile);
+  return {
+    id: profile.id,
+    label: profile.label,
+    description: profile.description,
+    selected: profile.id === activeProfileId,
+    ready,
+    reason: ready ? null : `等待 ${profile.requiredAction} 的 WebM 与 keyframe 到位`,
+    assetRoot: profile.assetRoot,
+    requiredAction: profile.requiredAction
+  };
+}
+
+async function petProfileState(): Promise<PetProfileState> {
+  const config = await loadPetProfileConfig();
+  await activeProfileDefinition();
+  const defaultProfileId = defaultPetProfileId(config);
+  const profiles = await Promise.all(
+    Object.values(config.profiles).map((profile) => summarizeProfile(profile))
+  );
+
+  return {
+    activeProfileId,
+    defaultProfileId,
+    profiles
+  };
+}
+
+async function activeProfileDefinition(): Promise<PetProfileDefinition> {
+  const config = await loadPetProfileConfig();
+  const defaultProfileId = defaultPetProfileId(config);
+  const requestedProfile = profileDefinition(config, activeProfileId);
+
+  if (requestedProfile.id !== defaultProfileId && !(await profileReady(requestedProfile))) {
+    activeProfileId = defaultProfileId;
+    await saveSelectedProfile();
+  } else {
+    activeProfileId = requestedProfile.id;
+  }
+
+  return profileDefinition(config, activeProfileId);
+}
+
+async function readActiveCompanionConfig(): Promise<CompanionConfig> {
+  const profile = await activeProfileDefinition();
+  return readProfileJson<CompanionConfig>(profile, 'companionConfigPath');
+}
+
+async function readActiveStatesConfig(): Promise<StatesConfig> {
+  const profile = await activeProfileDefinition();
+  return readProfileJson<StatesConfig>(profile, 'statesConfigPath');
+}
+
+async function readActiveActionRegistryConfig(): Promise<ActionRegistryConfig> {
+  const profile = await activeProfileDefinition();
+  const registry = await readProfileJson<ActionRegistryConfig>(profile, 'actionRegistryPath');
+  return materializeRegistryAvailability(profile, registry);
 }
 
 function sendToRendererWindows(channel: string, payload: unknown): void {
@@ -212,15 +369,41 @@ function timestampMs(value: string | undefined): number | null {
 }
 
 function registerConfigHandlers(): void {
-  ipcMain.handle('config:get-companion', () =>
-    readJsonFile<CompanionConfig>('data', 'config', 'companion.config.json')
-  );
-  ipcMain.handle('config:get-states', () =>
-    readJsonFile<StatesConfig>('data', 'config', 'states.config.json')
-  );
-  ipcMain.handle('config:get-action-registry', () =>
-    readJsonFile<ActionRegistryConfig>('data', 'config', 'action_registry.config.json')
-  );
+  ipcMain.handle('config:get-companion', () => readActiveCompanionConfig());
+  ipcMain.handle('config:get-states', () => readActiveStatesConfig());
+  ipcMain.handle('config:get-action-registry', () => readActiveActionRegistryConfig());
+}
+
+function publishPetProfileState(state: PetProfileState): void {
+  sendToRendererWindows(PET_PROFILE_CHANGED_CHANNEL, state);
+}
+
+function registerPetProfileHandlers(): void {
+  ipcMain.handle('pet-profile:list', () => petProfileState());
+  ipcMain.handle('pet-profile:set', async (_event, profileId: unknown) => {
+    if (typeof profileId !== 'string') {
+      throw new Error('Invalid pet profile id.');
+    }
+
+    const config = await loadPetProfileConfig();
+    const profile = config.profiles[profileId];
+    if (!profile) {
+      throw new Error(`Unknown pet profile: ${profileId}`);
+    }
+    if (profile.id !== defaultPetProfileId(config) && !(await profileReady(profile))) {
+      throw new Error(profile.description ? `${profile.label} 素材未就绪。` : 'Pet profile is not ready.');
+    }
+
+    activeProfileId = profile.id;
+    activeCompanionConfig = await readActiveCompanionConfig();
+    manualRenderSelection = null;
+    await saveSelectedProfile();
+    publishManualRenderSelection();
+
+    const state = await petProfileState();
+    publishPetProfileState(state);
+    return state;
+  });
 }
 
 async function loadCodexPluginConfig(): Promise<CodexPluginConfig> {
@@ -527,6 +710,10 @@ function publishManualRenderSelection(): void {
   sendToRendererWindows(MANUAL_RENDER_SELECTION_CHANNEL, manualRenderSelection);
 }
 
+function publishInteractionDragActive(active: boolean): void {
+  sendToRendererWindows(INTERACTION_DRAG_ACTIVE_CHANNEL, active);
+}
+
 function registerManualRenderHandlers(): void {
   ipcMain.handle('render:get-manual-selection', () => manualRenderSelection);
   ipcMain.handle('render:set-manual-selection', (_event, selection: unknown) => {
@@ -729,10 +916,15 @@ function handleMacInputEvent(event: { type: string; x?: number; y?: number }): v
 
   if (event.type === 'leftDown') {
     macInputDragPoint = { x: event.x, y: event.y };
+    macInputDragging = false;
     return;
   }
 
   if (event.type === 'leftDragged' && macInputDragPoint) {
+    if (!macInputDragging) {
+      macInputDragging = true;
+      publishInteractionDragActive(true);
+    }
     const deltaX = event.x - macInputDragPoint.x;
     const deltaY = event.y - macInputDragPoint.y;
     const [currentX, currentY] = mainWindow.getPosition();
@@ -744,6 +936,10 @@ function handleMacInputEvent(event: { type: string; x?: number; y?: number }): v
 
   if (event.type === 'leftUp') {
     macInputDragPoint = null;
+    if (macInputDragging) {
+      macInputDragging = false;
+      publishInteractionDragActive(false);
+    }
     return;
   }
 
@@ -1342,7 +1538,7 @@ function registerKeyboardCommands(mainWindow: BrowserWindow): void {
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
-  const companionConfig = await readJsonFile<CompanionConfig>('data', 'config', 'companion.config.json');
+  const companionConfig = await readActiveCompanionConfig();
   activeCompanionConfig = companionConfig;
   windowControls = {
     ...DEFAULT_WINDOW_CONTROLS,
@@ -1411,7 +1607,9 @@ async function createMainWindow(): Promise<BrowserWindow> {
 }
 
 app.whenReady().then(async () => {
+  await loadSelectedProfile();
   registerConfigHandlers();
+  registerPetProfileHandlers();
   registerWindowControlHandlers();
   registerManualRenderHandlers();
   registerShortcutHandlers();

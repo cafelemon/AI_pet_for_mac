@@ -37,6 +37,45 @@ export interface ActionRegistryConfig {
   actions: Record<string, ActionDefinition>;
 }
 
+export interface PetProfileConfig {
+  version: number;
+  defaultProfileId: string;
+  profiles: Record<string, PetProfileDefinition>;
+}
+
+export interface PetProfileDefinition {
+  id: string;
+  label: string;
+  description: string;
+  companionConfigPath: string;
+  statesConfigPath: string;
+  actionRegistryPath: string;
+  motionCatalogPath: string;
+  motionSourcesPath: string;
+  actionProgressPath: string;
+  qaRoot: string;
+  assetRoot: string;
+  requiredAction: string;
+  locked?: boolean;
+}
+
+export interface PetProfileSummary {
+  id: string;
+  label: string;
+  description: string;
+  selected: boolean;
+  ready: boolean;
+  reason: string | null;
+  assetRoot: string;
+  requiredAction: string;
+}
+
+export interface PetProfileState {
+  activeProfileId: string;
+  defaultProfileId: string;
+  profiles: PetProfileSummary[];
+}
+
 export type ActionType = 'state' | 'state_variant' | 'transition' | 'event' | 'interaction' | 'fallback';
 
 export interface ActionDefinition {
@@ -100,6 +139,8 @@ export interface CompanionAPI {
   getCompanionConfig: () => Promise<CompanionConfig>;
   getStatesConfig: () => Promise<StatesConfig>;
   getActionRegistryConfig: () => Promise<ActionRegistryConfig>;
+  getPetProfiles: () => Promise<PetProfileState>;
+  setPetProfile: (profileId: string) => Promise<PetProfileState>;
   assetUrl: (relativePath: string) => string;
   getCodexRuntimeState: () => Promise<CodexRenderState | null>;
   getReminderRuntimeState: () => Promise<ReminderNotification | null>;
@@ -134,9 +175,11 @@ export interface CompanionAPI {
   onMouseHitTestSample: (callback: (point: MouseHitTestPoint) => void) => () => void;
   onCompanionCommand: (callback: (command: CompanionCommand) => void) => () => void;
   onManualRenderSelection: (callback: (selection: ManualRenderSelection | null) => void) => () => void;
+  onPetProfileChanged: (callback: (state: PetProfileState) => void) => () => void;
   onControlCenterModule: (callback: (module: ControlCenterModule) => void) => () => void;
   onShortcutsUpdated: (callback: (shortcuts: ShortcutBinding[]) => void) => () => void;
   onInputPermissionStatus: (callback: (status: InputPermissionStatus) => void) => () => void;
+  onInteractionDragActive: (callback: (active: boolean) => void) => () => void;
   onCodexRuntimeState: (callback: (state: CodexRenderState | null) => void) => () => void;
   onReminderRuntimeState: (callback: (state: ReminderNotification | null) => void) => () => void;
   onRemindersUpdated: (callback: (reminders: ReminderRecord[]) => void) => () => void;

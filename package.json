@@ -1,6 +1,6 @@
 {
   "name": "desktop-ai-companion",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Desktop AI Companion project scaffold.",
   "main": "./out/main/index.js",

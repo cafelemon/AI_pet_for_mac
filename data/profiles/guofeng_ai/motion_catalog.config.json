@@ -1,0 +1,373 @@
+{
+  "actions": [
+    {
+      "id": "idle",
+      "label": "idle",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "站立待机循环：古风角色自然站立、呼吸、眨眼",
+      "runtime": true
+    },
+    {
+      "id": "idle_cross_arm",
+      "label": "cross arm idle",
+      "category": "古风待机",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "抱胸站立循环：古风角色站姿抱胸、轻微呼吸和眨眼",
+      "runtime": true
+    },
+    {
+      "id": "stand_to_cross_arm",
+      "label": "stand to cross arm",
+      "category": "姿态衔接",
+      "stage": "Guofeng V1",
+      "playback": "one_shot",
+      "description": "基础站姿到抱胸站姿：从自然站立过渡到抱胸站立",
+      "runtime": true
+    },
+    {
+      "id": "reading",
+      "label": "reading",
+      "category": "阅读主状态",
+      "stage": "PB3.1",
+      "playback": "loop",
+      "description": "阅读主状态：古风角色看书、翻页、轻微眨眼",
+      "runtime": true
+    },
+    {
+      "id": "coding",
+      "label": "coding",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "Codex 正在运行：古风角色伏案写经文",
+      "runtime": true
+    },
+    {
+      "id": "thinking",
+      "label": "thinking",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "loop",
+      "description": "思考主状态：古风角色安静思考循环",
+      "runtime": true
+    },
+    {
+      "id": "bath_idle",
+      "label": "bath idle",
+      "category": "古风待机",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "洗澡循环：古风角色日常洗澡动作",
+      "runtime": true
+    },
+    {
+      "id": "sword_flight_idle",
+      "label": "sword flight idle",
+      "category": "古风待机",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "御剑飞行循环：古风角色御剑飞行动作",
+      "runtime": true
+    },
+    {
+      "id": "success",
+      "label": "success",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "任务完成：轻轻跳起，小烟花粒子爆开",
+      "runtime": true
+    },
+    {
+      "id": "error",
+      "label": "error",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "任务失败：鸭子坐，小阴云下雨",
+      "runtime": true
+    },
+    {
+      "id": "reminder",
+      "label": "reminder",
+      "category": "原有核心",
+      "stage": "PB2",
+      "playback": "one_shot",
+      "description": "事项提醒：手叉腰，手指向提醒气泡方向",
+      "runtime": true
+    },
+    {
+      "id": "sleep",
+      "label": "sleep",
+      "category": "原有核心",
+      "stage": "PB1",
+      "playback": "loop",
+      "description": "睡眠主状态：古风角色睡觉循环",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_idle",
+      "label": "duck sit idle",
+      "category": "待机主姿态",
+      "stage": "Priority Idle V1",
+      "playback": "loop",
+      "description": "鸭子坐主待机姿态：稳定鸭子坐、轻微呼吸和眨眼",
+      "runtime": true
+    },
+    {
+      "id": "sit_split_cross_arm_idle",
+      "label": "split cross arm sit",
+      "category": "古风坐姿",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "抱胸分腿坐循环：分腿坐姿、抱胸、轻微呼吸",
+      "runtime": true
+    },
+    {
+      "id": "sit_hug_knee_idle",
+      "label": "hug knee sit",
+      "category": "古风坐姿",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "抱腿坐循环：抱膝坐姿、轻微呼吸和眨眼",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_head_hair",
+      "label": "duck sit hair",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐歪头撩发：保持坐姿，轻轻歪头并整理发梢",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_finger_lip",
+      "label": "duck sit finger lip",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐含指抿唇：保持坐姿，手靠近嘴边做小表情",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_stretch",
+      "label": "duck sit stretch",
+      "category": "鸭子坐待机小动作",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐伸懒腰：从鸭子坐轻轻舒展身体后回到坐姿",
+      "runtime": true
+    },
+    {
+      "id": "stand_to_duck_sit",
+      "label": "stand to duck sit",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "站立到鸭子坐：自然站立过渡到稳定鸭子坐",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_to_stand",
+      "label": "duck sit to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐到站立：从稳定坐姿自然站回站立",
+      "runtime": true
+    },
+    {
+      "id": "duck_sit_to_sleep",
+      "label": "duck sit to sleep",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "鸭子坐到睡眠：从鸭子坐自然进入小杯子或软垫睡眠姿态",
+      "runtime": true
+    },
+    {
+      "id": "sleep_to_stand",
+      "label": "sleep to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V1",
+      "playback": "one_shot",
+      "description": "睡眠到站立：从小杯子或软垫睡醒后自然站回站立待机姿态",
+      "runtime": true
+    },
+    {
+      "id": "stand_to_sword_flight",
+      "label": "stand to sword flight",
+      "category": "姿态衔接",
+      "stage": "Guofeng V1",
+      "playback": "one_shot",
+      "description": "站姿到御剑飞行：从站立过渡到御剑飞行",
+      "runtime": true
+    },
+    {
+      "id": "stand_to_sword_dance",
+      "label": "stand to sword dance",
+      "category": "古风炫技",
+      "stage": "Guofeng V1",
+      "playback": "one_shot",
+      "description": "站立到舞剑：从站姿进入舞剑动作",
+      "runtime": true
+    },
+    {
+      "id": "sword_dance_to_sword_rain",
+      "label": "sword dance to sword rain",
+      "category": "古风炫技",
+      "stage": "Guofeng V1",
+      "playback": "one_shot",
+      "description": "舞剑到万剑归宗：舞剑后释放万剑归宗效果",
+      "runtime": true
+    },
+    {
+      "id": "sit_to_talisman_cast",
+      "label": "sit to talisman cast",
+      "category": "古风炫技",
+      "stage": "Guofeng V1",
+      "playback": "one_shot",
+      "description": "盘腿坐到画符：从盘腿坐姿进入画符动作",
+      "runtime": true
+    },
+    {
+      "id": "idle_yawn",
+      "label": "yawn",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "待机打哈欠：轻轻打哈欠，结束回自然站姿",
+      "runtime": true
+    },
+    {
+      "id": "idle_hair",
+      "label": "hair",
+      "category": "待机小动作",
+      "stage": "PB3.1",
+      "playback": "one_shot",
+      "description": "待机顺头发：轻轻整理头发，结束回自然站姿",
+      "runtime": true
+    },
+    {
+      "id": "mouse_hover_look",
+      "label": "mouse hover look",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "鼠标靠近：角色抬头看向鼠标方向，轻微注意到用户",
+      "runtime": false
+    },
+    {
+      "id": "mouse_leave_back",
+      "label": "mouse leave back",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "鼠标离开：角色视线回到原状态，动作自然收回",
+      "runtime": false
+    },
+    {
+      "id": "click_head_happy",
+      "label": "click head happy",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "点击头部：开心眨眼或轻轻笑一下，短反馈",
+      "runtime": false
+    },
+    {
+      "id": "click_body_confused",
+      "label": "click body confused",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "点击身体：轻微困惑、歪头或小退半步",
+      "runtime": false
+    },
+    {
+      "id": "drag_start_lift",
+      "label": "drag start lift",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "鼠标抓起：参考古风角色被鼠标抓起的反馈动作",
+      "runtime": false
+    },
+    {
+      "id": "drag_hold_lift",
+      "label": "drag hold lift",
+      "category": "用户交互",
+      "stage": "Guofeng V1",
+      "playback": "loop",
+      "description": "鼠标抓起：Option 加左键拖动窗口期间的悬空抓起循环",
+      "runtime": true
+    },
+    {
+      "id": "drag_end_dizzy",
+      "label": "drag end dizzy",
+      "category": "用户交互",
+      "stage": "P1-A",
+      "playback": "one_shot",
+      "description": "拖拽结束：落地后轻微晕乎，然后恢复站稳",
+      "runtime": false
+    },
+    {
+      "id": "stand_to_reading",
+      "label": "stand to reading",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "站立到读书：从自然站立过渡到读书常态动作",
+      "runtime": false
+    },
+    {
+      "id": "reading_to_stand",
+      "label": "reading to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "读书到站立：从读书常态动作自然回到站立待机",
+      "runtime": false
+    },
+    {
+      "id": "stand_to_coding",
+      "label": "stand to coding",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "站立到工作：从自然站立过渡到 coding 常态动作",
+      "runtime": false
+    },
+    {
+      "id": "coding_to_stand",
+      "label": "coding to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "工作到站立：从 coding 常态动作自然回到站立待机",
+      "runtime": false
+    },
+    {
+      "id": "stand_to_thinking",
+      "label": "stand to thinking",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "站立到思考：从自然站立过渡到 thinking 常态动作",
+      "runtime": false
+    },
+    {
+      "id": "thinking_to_stand",
+      "label": "thinking to stand",
+      "category": "姿态衔接",
+      "stage": "Priority Idle V2",
+      "playback": "one_shot",
+      "description": "思考到站立：从 thinking 常态动作自然回到站立待机",
+      "runtime": false
+    }
+  ]
+}

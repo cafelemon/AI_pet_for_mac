@@ -1,0 +1,23 @@
+{
+  "state": "sword_flight_idle",
+  "alpha_bbox": {
+    "x1": 20,
+    "y1": 472,
+    "x2": 1516,
+    "y2": 1691,
+    "width": 1497,
+    "height": 1220
+  },
+  "main_component": {
+    "x1": 20,
+    "y1": 472,
+    "x2": 1516,
+    "y2": 1691,
+    "width": 1497,
+    "height": 1220,
+    "area": 400854
+  },
+  "foreground_pixels": 405199,
+  "blue_residual_pixels": 23637,
+  "blue_residual_ratio": 0.05833429993657437
+}

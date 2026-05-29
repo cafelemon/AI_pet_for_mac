@@ -1,0 +1,23 @@
+{
+  "state": "duck_sit_idle",
+  "alpha_bbox": {
+    "x1": 283,
+    "y1": 587,
+    "x2": 1252,
+    "y2": 1699,
+    "width": 970,
+    "height": 1113
+  },
+  "main_component": {
+    "x1": 283,
+    "y1": 587,
+    "x2": 1247,
+    "y2": 1699,
+    "width": 965,
+    "height": 1113,
+    "area": 504036
+  },
+  "foreground_pixels": 505066,
+  "blue_residual_pixels": 10598,
+  "blue_residual_ratio": 0.02098339622940368
+}

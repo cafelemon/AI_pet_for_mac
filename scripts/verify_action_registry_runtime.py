@@ -3,15 +3,16 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 from pathlib import Path
 
 import action_registry
+import pet_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STATES_CONFIG_PATH = ROOT / "data" / "config" / "states.config.json"
 MAIN_TS_PATH = ROOT / "app" / "electron" / "main.ts"
 APP_TSX_PATH = ROOT / "app" / "renderer" / "src" / "App.tsx"
 
@@ -26,12 +27,19 @@ def extract_string_set(path: Path, const_name: str) -> set[str]:
 
 
 def main() -> int:
-    states_config = json.loads(STATES_CONFIG_PATH.read_text(encoding="utf-8"))
+    parser = argparse.ArgumentParser(description="Check renderer state contracts for one pet profile.")
+    parser.add_argument("--profile", default=pet_profiles.DEFAULT_PROFILE_ID, help="Pet profile id.")
+    args = parser.parse_args()
+
+    action_registry.set_profile(args.profile)
+    states_config = json.loads(pet_profiles.states_config_path(args.profile).read_text(encoding="utf-8"))
     configured_states = set(states_config["states"])
     main_companion_states = extract_string_set(MAIN_TS_PATH, "COMPANION_STATES")
     renderer_states = extract_string_set(APP_TSX_PATH, "RENDER_STATES")
     actions = action_registry.load_actions()
+    allow_unavailable = args.profile != pet_profiles.DEFAULT_PROFILE_ID
     failures: list[str] = []
+    warnings: list[str] = []
 
     for action_id in states_config["pa0KeyframeFolders"]:
         action = actions.get(action_id)
@@ -39,7 +47,11 @@ def main() -> int:
             failures.append(f"missing registry action: {action_id}")
             continue
         if not action.get("runtime") or not action.get("available"):
-            failures.append(f"configured render action is not runtime available: {action_id}")
+            message = f"configured render action is not runtime available: {action_id}"
+            if allow_unavailable:
+                warnings.append(message)
+            else:
+                failures.append(message)
 
     for state in sorted(configured_states):
         if state not in main_companion_states:
@@ -47,6 +59,8 @@ def main() -> int:
         if state not in renderer_states:
             failures.append(f"state missing from renderer RENDER_STATES: {state}")
 
+    for warning in warnings:
+        print(f"WARN: {warning}")
     for failure in failures:
         print(f"FAIL: {failure}")
 

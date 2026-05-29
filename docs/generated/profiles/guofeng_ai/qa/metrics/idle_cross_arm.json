@@ -1,0 +1,23 @@
+{
+  "state": "idle_cross_arm",
+  "alpha_bbox": {
+    "x1": 484,
+    "y1": 220,
+    "x2": 1166,
+    "y2": 1713,
+    "width": 683,
+    "height": 1494
+  },
+  "main_component": {
+    "x1": 484,
+    "y1": 220,
+    "x2": 1144,
+    "y2": 1713,
+    "width": 661,
+    "height": 1494,
+    "area": 468956
+  },
+  "foreground_pixels": 470377,
+  "blue_residual_pixels": 18838,
+  "blue_residual_ratio": 0.040048726872274794
+}

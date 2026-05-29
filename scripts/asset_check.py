@@ -10,21 +10,22 @@ import struct
 from pathlib import Path
 
 import action_registry
+import pet_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
-STATES_CONFIG_PATH = ROOT / "data" / "config" / "states.config.json"
 CANVAS_SIZE = (1536, 1728)
 NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_(?P<index>\d{2})\.(png|webp)$")
 WEBM_NAME_PATTERN = re.compile(r"^(?P<state>[a-z_]+)_loop\.webm$")
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
-def configured_render_actions() -> tuple[str, ...]:
-    if not STATES_CONFIG_PATH.exists():
+def configured_render_actions(profile_id: str) -> tuple[str, ...]:
+    states_config_path = pet_profiles.states_config_path(profile_id)
+    if not states_config_path.exists():
         return action_registry.action_ids()
 
-    config = json.loads(STATES_CONFIG_PATH.read_text(encoding="utf-8"))
+    config = json.loads(states_config_path.read_text(encoding="utf-8"))
     action_ids = config.get("pa0KeyframeFolders")
     if not isinstance(action_ids, list):
         return action_registry.action_ids()
@@ -145,12 +146,13 @@ def check_keyframes(
                 failures.append(f"missing PNG alpha channel: {keyframe.relative_to(ROOT)}")
 
 
-def check_assets(strict: bool, webm_strict: bool) -> int:
+def check_assets(profile_id: str, strict: bool, webm_strict: bool) -> int:
     failures: list[str] = []
     warnings: list[str] = []
+    action_registry.set_profile(profile_id)
     actions = action_registry.load_actions()
 
-    for action_id in configured_render_actions():
+    for action_id in configured_render_actions(profile_id):
         action = actions.get(action_id)
         if not action:
             failures.append(f"render action is missing from registry: {action_id}")
@@ -176,6 +178,7 @@ def check_assets(strict: bool, webm_strict: bool) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate action registry assets.")
+    parser.add_argument("--profile", default=pet_profiles.DEFAULT_PROFILE_ID, help="Pet profile id.")
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -187,7 +190,7 @@ def main() -> int:
         help="Require a non-empty loop WebM file for every available runtime action.",
     )
     args = parser.parse_args()
-    return check_assets(strict=args.strict, webm_strict=args.webm_strict)
+    return check_assets(profile_id=args.profile, strict=args.strict, webm_strict=args.webm_strict)
 
 
 if __name__ == "__main__":

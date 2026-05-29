@@ -21,6 +21,7 @@ import type {
   KeyframeDescriptor,
   ManualRenderSelection,
   MouseHitRegion,
+  PetProfileState,
   ReminderNotification,
   ReminderRecord,
   ShortcutBinding,
@@ -94,6 +95,7 @@ const STAND_TO_CODING = 'stand_to_coding';
 const CODING_TO_STAND = 'coding_to_stand';
 const STAND_TO_THINKING = 'stand_to_thinking';
 const THINKING_TO_STAND = 'thinking_to_stand';
+const DRAG_HOLD_LIFT = 'drag_hold_lift';
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
 const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1000;
@@ -384,6 +386,7 @@ function PetRenderer({
   codexState,
   reminderState,
   taskNotification,
+  interactionDragActive,
   keyframes,
   catalog,
   onHitRegionsChange
@@ -394,6 +397,7 @@ function PetRenderer({
   codexState: CodexRenderState | null;
   reminderState: ReminderNotification | null;
   taskNotification: TaskNotification | null;
+  interactionDragActive: boolean;
   keyframes: KeyframeDescriptor[];
   catalog: CompanionCatalog;
   onHitRegionsChange: (regions: MouseHitRegion[]) => void;
@@ -474,11 +478,13 @@ function PetRenderer({
   const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === 'idle' ? selection.variant : null;
   const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : undefined;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : undefined;
+  const interactionDragKeyframe = interactionDragActive ? catalog.byFolder.get(DRAG_HOLD_LIFT) : undefined;
   const postureIdleKeyframe =
     !idleMotionFolder && renderedState === 'idle' && !renderedVariant && idlePosture === 'duck_sit'
       ? catalog.byFolder.get(DUCK_SIT_IDLE)
       : undefined;
   const activeKeyframe =
+    interactionDragKeyframe ??
     manualActionKeyframe ??
     activeMotionKeyframe ??
     (renderedState === 'idle' && renderedVariant ? catalog.byFolder.get(renderedVariant) : undefined) ??
@@ -487,6 +493,15 @@ function PetRenderer({
     catalog.byState.get('idle') ??
     keyframes[0];
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
+
+  useEffect(() => {
+    if (!interactionDragKeyframe) {
+      return;
+    }
+
+    clearIdleMotionTimer();
+    clearMotionSequence();
+  }, [clearIdleMotionTimer, clearMotionSequence, interactionDragKeyframe]);
 
   useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
@@ -623,7 +638,7 @@ function PetRenderer({
     <main className="companion-shell">
       <div className="companion-stage">
         <Companion
-          key={`${renderedState}:${activeKeyframe.folder}:${selection.replayId ?? 0}`}
+          key={`${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? 'dragging' : (selection.replayId ?? 0)}`}
           keyframe={activeKeyframe}
           canvas={companionConfig.renderer.keyframeCanvas}
           state={renderedState}
@@ -642,34 +657,45 @@ function PetApp(): ReactElement | null {
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
   const [actionRegistry, setActionRegistry] = useState<ActionRegistryConfig | null>(null);
   const [manualSelection, setManualSelection] = useState<ManualRenderSelection | null>(null);
+  const [interactionDragActive, setInteractionDragActive] = useState(false);
   const { codexState, reminderState, taskNotification } = useRuntimeState();
   const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
+
+  const loadPetConfig = useCallback(async (): Promise<void> => {
+    const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextSelection] = await Promise.all([
+      window.companionAPI.getCompanionConfig(),
+      window.companionAPI.getStatesConfig(),
+      window.companionAPI.getActionRegistryConfig(),
+      window.companionAPI.getManualRenderSelection()
+    ]);
+
+    setCompanionConfig(nextCompanionConfig);
+    setStatesConfig(nextStatesConfig);
+    setActionRegistry(nextActionRegistry);
+    setManualSelection(nextSelection);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load(): Promise<void> {
-      const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextSelection] = await Promise.all([
-        window.companionAPI.getCompanionConfig(),
-        window.companionAPI.getStatesConfig(),
-        window.companionAPI.getActionRegistryConfig(),
-        window.companionAPI.getManualRenderSelection()
-      ]);
-
+    loadPetConfig().catch((error: unknown) => {
       if (!cancelled) {
-        setCompanionConfig(nextCompanionConfig);
-        setStatesConfig(nextStatesConfig);
-        setActionRegistry(nextActionRegistry);
-        setManualSelection(nextSelection);
+        console.error('Failed to load pet config', error);
       }
-    }
-
-    load().catch((error: unknown) => console.error('Failed to load pet config', error));
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadPetConfig]);
   useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
+  useEffect(() => window.companionAPI.onInteractionDragActive(setInteractionDragActive), []);
+  useEffect(
+    () =>
+      window.companionAPI.onPetProfileChanged(() => {
+        loadPetConfig().catch((error: unknown) => console.error('Failed to reload pet profile', error));
+      }),
+    [loadPetConfig]
+  );
 
   const publishHitRegions = useCallback((regions: MouseHitRegion[]): void => {
     window.companionAPI.setMouseHitRegions(regions).catch((error: unknown) => {
@@ -689,6 +715,7 @@ function PetApp(): ReactElement | null {
       codexState={codexState}
       reminderState={reminderState}
       taskNotification={taskNotification}
+      interactionDragActive={interactionDragActive}
       keyframes={keyframes}
       catalog={catalog}
       onHitRegionsChange={publishHitRegions}
@@ -699,11 +726,15 @@ function PetApp(): ReactElement | null {
 function SettingsModule({
   shortcuts,
   permissionStatus,
+  petProfiles,
+  onSelectPetProfile,
   onUpdateShortcut,
   onResetShortcut
 }: {
   shortcuts: ShortcutBinding[];
   permissionStatus: InputPermissionStatus;
+  petProfiles: PetProfileState | null;
+  onSelectPetProfile: (profileId: string) => void;
   onUpdateShortcut: (id: string, accelerator: string) => Promise<void>;
   onResetShortcut: (id: string) => Promise<void>;
 }): ReactElement {
@@ -755,6 +786,28 @@ function SettingsModule({
 
       {error ? <p className="settings-module__error">{error}</p> : null}
 
+      {petProfiles ? (
+        <div className="profile-card">
+          <p className="settings-module__title">桌宠形象</p>
+          <div className="profile-list">
+            {petProfiles.profiles.map((profile) => (
+              <button
+                className={profile.selected ? 'profile-option profile-option--active' : 'profile-option'}
+                disabled={profile.selected || !profile.ready}
+                key={profile.id}
+                type="button"
+                onClick={() => onSelectPetProfile(profile.id)}
+              >
+                <span className="profile-option__label">{profile.label}</span>
+                <span className="profile-option__meta">
+                  {profile.ready ? (profile.selected ? '使用中' : '可切换') : profile.reason}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <div className="shortcut-list">
         {shortcuts.map((shortcut) => (
           <form className="shortcut-item" key={shortcut.id} onSubmit={(event) => submitShortcut(event, shortcut)}>
@@ -793,49 +846,63 @@ function ControlCenterApp(): ReactElement | null {
   const [activeModule, setActiveModule] = useState<ControlCenterModule>(moduleFromSearch);
   const [shortcuts, setShortcuts] = useState<ShortcutBinding[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<InputPermissionStatus>('unknown');
+  const [petProfiles, setPetProfiles] = useState<PetProfileState | null>(null);
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
   const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
+
+  const loadControlCenter = useCallback(async (): Promise<void> => {
+    const [
+      nextCompanionConfig,
+      nextStatesConfig,
+      nextActionRegistry,
+      nextWindowControls,
+      nextSelection,
+      nextShortcuts,
+      nextPermissionStatus,
+      nextPetProfiles
+    ] = await Promise.all([
+      window.companionAPI.getCompanionConfig(),
+      window.companionAPI.getStatesConfig(),
+      window.companionAPI.getActionRegistryConfig(),
+      window.companionAPI.getWindowControls(),
+      window.companionAPI.getManualRenderSelection(),
+      window.companionAPI.getShortcuts(),
+      window.companionAPI.getInputPermissionStatus(),
+      window.companionAPI.getPetProfiles()
+    ]);
+
+    setCompanionConfig(nextCompanionConfig);
+    setStatesConfig(nextStatesConfig);
+    setActionRegistry(nextActionRegistry);
+    setWindowControls(nextWindowControls);
+    setManualSelection(nextSelection);
+    setShortcuts(nextShortcuts);
+    setPermissionStatus(nextPermissionStatus);
+    setPetProfiles(nextPetProfiles);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
-    async function load(): Promise<void> {
-      const [
-        nextCompanionConfig,
-        nextStatesConfig,
-        nextActionRegistry,
-        nextWindowControls,
-        nextSelection,
-        nextShortcuts,
-        nextPermissionStatus
-      ] = await Promise.all([
-        window.companionAPI.getCompanionConfig(),
-        window.companionAPI.getStatesConfig(),
-        window.companionAPI.getActionRegistryConfig(),
-        window.companionAPI.getWindowControls(),
-        window.companionAPI.getManualRenderSelection(),
-        window.companionAPI.getShortcuts(),
-        window.companionAPI.getInputPermissionStatus()
-      ]);
-
+    loadControlCenter().catch((error: unknown) => {
       if (!cancelled) {
-        setCompanionConfig(nextCompanionConfig);
-        setStatesConfig(nextStatesConfig);
-        setActionRegistry(nextActionRegistry);
-        setWindowControls(nextWindowControls);
-        setManualSelection(nextSelection);
-        setShortcuts(nextShortcuts);
-        setPermissionStatus(nextPermissionStatus);
+        console.error('Failed to load control center', error);
       }
-    }
-
-    load().catch((error: unknown) => console.error('Failed to load control center', error));
+    });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadControlCenter]);
 
   useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
+  useEffect(
+    () =>
+      window.companionAPI.onPetProfileChanged((state) => {
+        setPetProfiles(state);
+        loadControlCenter().catch((error: unknown) => console.error('Failed to reload pet profile', error));
+      }),
+    [loadControlCenter]
+  );
   useEffect(() => window.companionAPI.onControlCenterModule(setActiveModule), []);
   useEffect(() => window.companionAPI.onShortcutsUpdated(setShortcuts), []);
   useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
@@ -859,6 +926,13 @@ function ControlCenterApp(): ReactElement | null {
       .setManualRenderSelection(selection)
       .then(setManualSelection)
       .catch((error: unknown) => console.error('Failed to update render selection', error));
+  }, []);
+
+  const updatePetProfile = useCallback((profileId: string): void => {
+    window.companionAPI
+      .setPetProfile(profileId)
+      .then(setPetProfiles)
+      .catch((error: unknown) => console.error('Failed to update pet profile', error));
   }, []);
 
   const createReminder = useCallback(
@@ -1015,6 +1089,8 @@ function ControlCenterApp(): ReactElement | null {
           <SettingsModule
             shortcuts={shortcuts}
             permissionStatus={permissionStatus}
+            petProfiles={petProfiles}
+            onSelectPetProfile={updatePetProfile}
             onUpdateShortcut={updateShortcut}
             onResetShortcut={resetShortcut}
           />

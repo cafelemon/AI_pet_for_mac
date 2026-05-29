@@ -8,21 +8,21 @@ import json
 from pathlib import Path
 
 import action_registry
+import pet_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG_PATH = ROOT / "data" / "config" / "motion_catalog.config.json"
-SOURCES_PATH = ROOT / "data" / "config" / "motion_sources.config.json"
-OUTPUT_PATH = ROOT / "docs" / "pb3" / "action_progress.md"
+ACTIVE_PROFILE_ID = pet_profiles.DEFAULT_PROFILE_ID
 
 
 def load_actions() -> list[dict[str, object]]:
-    catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    catalog = json.loads(pet_profiles.motion_catalog_path(ACTIVE_PROFILE_ID).read_text(encoding="utf-8"))
     return list(catalog["actions"])
 
 
 def load_source_config() -> dict[str, object]:
-    if not SOURCES_PATH.exists():
+    sources_path = pet_profiles.motion_sources_path(ACTIVE_PROFILE_ID)
+    if not sources_path.exists():
         return {
             "defaults": {
                 "provider": "unknown",
@@ -33,7 +33,7 @@ def load_source_config() -> dict[str, object]:
             },
             "sources": {},
         }
-    return json.loads(SOURCES_PATH.read_text(encoding="utf-8"))
+    return json.loads(sources_path.read_text(encoding="utf-8"))
 
 
 def source_info(action_id: str) -> dict[str, str | None]:
@@ -93,8 +93,8 @@ def webm_path(action_id: str) -> Path:
     return action_registry.webm_path(action_id)
 
 
-def white_keyframe_dir(action_id: str) -> Path:
-    return ROOT / "assets" / "character" / "reference" / "pb2_white_keyframes" / action_id
+def keyframe_path(action_id: str) -> Path:
+    return action_registry.fallback_path(action_id)
 
 
 def ensure_source_dirs(actions: list[dict[str, object]]) -> None:
@@ -134,10 +134,12 @@ def build_summary(actions: list[dict[str, object]]) -> dict[str, int]:
 
 def write_progress(actions: list[dict[str, object]]) -> None:
     summary = build_summary(actions)
+    output_path = pet_profiles.action_progress_path(ACTIVE_PROFILE_ID)
+    profile_flag = "" if ACTIVE_PROFILE_ID == pet_profiles.DEFAULT_PROFILE_ID else f" --profile {ACTIVE_PROFILE_ID}"
     rows = [
         "# Motion Action Progress",
         "",
-        "This table is generated from `data/config/motion_catalog.config.json` and local asset presence.",
+        f"This table is generated for profile `{ACTIVE_PROFILE_ID}` from its motion catalog and local asset presence.",
         "",
         "## Summary",
         "",
@@ -148,7 +150,7 @@ def write_progress(actions: list[dict[str, object]]) -> None:
         "",
         "## Progress Table",
         "",
-        "| Stage | Category | Action | Playback | Runtime wired | Provider | Mask preset | Matte preset | Crop preset | White keyframe | Source video | WebM | Status | Source path |",
+        "| Stage | Category | Action | Playback | Runtime wired | Provider | Mask preset | Matte preset | Crop preset | Keyframe | Source video | WebM | Status | Source path |",
         "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
 
@@ -170,7 +172,7 @@ def write_progress(actions: list[dict[str, object]]) -> None:
                     f"`{source_meta['maskPreset']}`",
                     f"`{source_meta['mattePreset']}`",
                     f"`{source_meta['cropPreset']}`",
-                    file_status(white_keyframe_dir(action_id)),
+                    file_status(keyframe_path(action_id)),
                     file_status(source_path(action_id)),
                     file_status(webm_path(action_id)),
                     status_label(status),
@@ -185,31 +187,37 @@ def write_progress(actions: list[dict[str, object]]) -> None:
             "",
             "## Next Fill List",
             "",
-            "Provide new source videos using the exact source path shown in the table. If the video is not from the current provider, update `data/config/motion_sources.config.json` first. After a video arrives, run:",
+            "Provide new source videos using the exact source path shown in the table. If the video is not from the current provider, update this profile's motion sources config first. After a video arrives, run:",
             "",
             "```bash",
-            "python3 scripts/update_motion_progress.py --ensure-dirs",
-            "python3 scripts/pb2_video_pipeline.py check --state <action>",
-            "python3 scripts/pb2_video_pipeline.py convert --state <action>",
+            f"python3 scripts/update_motion_progress.py{profile_flag} --ensure-dirs",
+            f"python3 scripts/pb2_video_pipeline.py check{profile_flag} --state <action>",
+            f"python3 scripts/pb2_video_pipeline.py convert{profile_flag} --state <action>",
             "```",
             "",
             "Full WebM validation should wait until all required runtime actions have WebM outputs:",
             "",
             "```bash",
-            "python3 scripts/asset_check.py --strict --webm-strict",
+            f"python3 scripts/asset_check.py{profile_flag} --strict --webm-strict",
             "```",
         ]
     )
 
-    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_PATH.write_text("\n".join(rows) + "\n", encoding="utf-8")
-    print(f"WROTE: {OUTPUT_PATH.relative_to(ROOT)}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    print(f"WROTE: {output_path.relative_to(ROOT)}")
 
 
 def main() -> int:
+    global ACTIVE_PROFILE_ID
     parser = argparse.ArgumentParser(description="Generate PB3 action progress markdown.")
+    parser.add_argument("--profile", default=pet_profiles.DEFAULT_PROFILE_ID, help="Pet profile id.")
     parser.add_argument("--ensure-dirs", action="store_true", help="Create source directories and .gitkeep files.")
     args = parser.parse_args()
+
+    pet_profiles.set_active_profile(args.profile)
+    ACTIVE_PROFILE_ID = pet_profiles.active_profile_id()
+    action_registry.set_profile(ACTIVE_PROFILE_ID)
 
     actions = load_actions()
     if args.ensure_dirs:

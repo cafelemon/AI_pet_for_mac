@@ -8,9 +8,11 @@ const TASK_NOTIFICATION_CHANNEL = "task:notification";
 const TASKS_UPDATED_CHANNEL = "task:updated";
 const MOUSE_HIT_TEST_SAMPLE_CHANNEL = "mouse:hit-test-sample";
 const MANUAL_RENDER_SELECTION_CHANNEL = "render:manual-selection";
+const PET_PROFILE_CHANGED_CHANNEL = "pet-profile:changed";
 const CONTROL_CENTER_MODULE_CHANNEL = "control-center:module";
 const SHORTCUTS_UPDATED_CHANNEL = "shortcuts:updated";
 const INPUT_PERMISSION_STATUS_CHANNEL = "input-permission:status";
+const INTERACTION_DRAG_ACTIVE_CHANNEL = "interaction:drag-active";
 const COMPANION_COMMANDS = /* @__PURE__ */ new Set([
   "next-state",
   "previous-state",
@@ -32,6 +34,8 @@ const companionAPI = {
   getCompanionConfig: () => electron.ipcRenderer.invoke("config:get-companion"),
   getStatesConfig: () => electron.ipcRenderer.invoke("config:get-states"),
   getActionRegistryConfig: () => electron.ipcRenderer.invoke("config:get-action-registry"),
+  getPetProfiles: () => electron.ipcRenderer.invoke("pet-profile:list"),
+  setPetProfile: (profileId) => electron.ipcRenderer.invoke("pet-profile:set", profileId),
   assetUrl: (relativePath) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => electron.ipcRenderer.invoke("codex:get-runtime-state"),
   getReminderRuntimeState: () => electron.ipcRenderer.invoke("reminders:get-runtime-state"),
@@ -92,6 +96,15 @@ const companionAPI = {
       electron.ipcRenderer.removeListener(MANUAL_RENDER_SELECTION_CHANNEL, listener);
     };
   },
+  onPetProfileChanged: (callback) => {
+    const listener = (_event, state) => {
+      callback(state);
+    };
+    electron.ipcRenderer.on(PET_PROFILE_CHANGED_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(PET_PROFILE_CHANGED_CHANNEL, listener);
+    };
+  },
   onControlCenterModule: (callback) => {
     const listener = (_event, module) => {
       callback(module);
@@ -117,6 +130,15 @@ const companionAPI = {
     electron.ipcRenderer.on(INPUT_PERMISSION_STATUS_CHANNEL, listener);
     return () => {
       electron.ipcRenderer.removeListener(INPUT_PERMISSION_STATUS_CHANNEL, listener);
+    };
+  },
+  onInteractionDragActive: (callback) => {
+    const listener = (_event, active) => {
+      callback(active);
+    };
+    electron.ipcRenderer.on(INTERACTION_DRAG_ACTIVE_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(INTERACTION_DRAG_ACTIVE_CHANNEL, listener);
     };
   },
   onCodexRuntimeState: (callback) => {

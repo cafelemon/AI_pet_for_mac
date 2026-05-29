@@ -13,20 +13,39 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import action_registry
+import pet_profiles
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CANVAS_SIZE = (1536, 1728)
-CATALOG_PATH = ROOT / "data" / "config" / "motion_catalog.config.json"
-SOURCES_PATH = ROOT / "data" / "config" / "motion_sources.config.json"
-MASK_PRESETS = ("auto", "none", "jimeng_corner", "kling_corner")
-MATTE_PRESETS = ("auto", "white", "neutral_floor", "sleep_props")
+ACTIVE_PROFILE_ID = pet_profiles.DEFAULT_PROFILE_ID
+CATALOG_PATH = pet_profiles.motion_catalog_path(ACTIVE_PROFILE_ID)
+SOURCES_PATH = pet_profiles.motion_sources_path(ACTIVE_PROFILE_ID)
+MASK_PRESETS = (
+    "auto",
+    "none",
+    "jimeng_corner",
+    "kling_corner",
+    "doubao_ai_corner",
+    "doubao_ai_dynamic",
+    "doubao_ai_main_states",
+)
+MATTE_PRESETS = ("auto", "white", "neutral_floor", "sleep_props", "blue_screen")
 CROP_PRESETS = ("auto", "none", "duck_sit_to_sleep", "sleep_to_stand")
 FLOOD_FILL_MARKER = (255, 0, 0)
 BBOX_PATTERN = re.compile(
     r"x1:(?P<x1>\d+) x2:(?P<x2>\d+) y1:(?P<y1>\d+) y2:(?P<y2>\d+) "
     r"w:(?P<width>\d+) h:(?P<height>\d+)"
 )
+
+
+def configure_profile(profile_id: str) -> None:
+    global ACTIVE_PROFILE_ID, CATALOG_PATH, SOURCES_PATH
+    pet_profiles.set_active_profile(profile_id)
+    ACTIVE_PROFILE_ID = pet_profiles.active_profile_id()
+    action_registry.set_profile(ACTIVE_PROFILE_ID)
+    CATALOG_PATH = pet_profiles.motion_catalog_path(ACTIVE_PROFILE_ID)
+    SOURCES_PATH = pet_profiles.motion_sources_path(ACTIVE_PROFILE_ID)
 
 
 @dataclass(frozen=True)
@@ -100,6 +119,14 @@ DUCK_SIT_FAMILY_STATES = (
 
 
 LAYOUT_PRESETS: dict[str, LayoutPreset] = {
+    "guofeng_standing": LayoutPreset(target_cx=768, target_bottom=1704, target_height=750, min_scale=0.34, max_scale=1.20),
+    "guofeng_seated": LayoutPreset(target_cx=768, target_bottom=1696, target_height=820, min_scale=0.70, max_scale=1.55),
+    "guofeng_work": LayoutPreset(target_cx=768, target_bottom=1718, target_height=1180, min_scale=0.70, max_scale=2.20),
+    "guofeng_work_small": LayoutPreset(target_cx=768, target_bottom=1704, target_height=760, min_scale=0.30, max_scale=1.00),
+    "guofeng_recline_small": LayoutPreset(target_cx=768, target_bottom=1668, target_height=520, min_scale=0.30, max_scale=1.00),
+    "guofeng_prop_sleep_small": LayoutPreset(target_cx=768, target_bottom=1648, target_height=680, min_scale=0.30, max_scale=1.00),
+    "guofeng_prop_wide": LayoutPreset(target_cx=768, target_bottom=1690, target_height=1220, min_scale=0.50, max_scale=2.00),
+    "guofeng_drag": LayoutPreset(target_cx=768, target_bottom=1640, target_height=1500, min_scale=0.70, max_scale=2.40),
     # Standing-family states are aligned to the current accepted `idle_yawn`
     # runtime body size, not to the full motion union box.
     "idle": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
@@ -387,6 +414,7 @@ def load_source_config() -> dict[str, object]:
                 "maskPreset": "none",
                 "mattePreset": "white",
                 "cropPreset": "none",
+                "layoutPreset": None,
             },
             "sources": {},
         }
@@ -428,12 +456,14 @@ def source_info(state: str) -> dict[str, str | None]:
     mask_preset = defaults.get("maskPreset") or "none"
     matte_preset = defaults.get("mattePreset") or "white"
     crop_preset = defaults.get("cropPreset") or "none"
+    layout_preset = defaults.get("layoutPreset")
     return {
         "provider": str(provider),
         "sourceFile": str(source_file) if source_file else None,
         "maskPreset": str(mask_preset),
         "mattePreset": str(matte_preset),
         "cropPreset": str(crop_preset),
+        "layoutPreset": str(layout_preset) if layout_preset else None,
     }
 
 
@@ -476,7 +506,7 @@ def output_webm(state: str) -> Path:
 
 
 def qa_contact_sheet(state: str) -> Path:
-    return ROOT / "docs" / "pb2" / "qa" / f"{state}_contact.png"
+    return pet_profiles.qa_root(ACTIVE_PROFILE_ID) / f"{state}_contact.png"
 
 
 def resolve_tool(name: str, explicit_path: str | None) -> str:
@@ -536,7 +566,11 @@ def probe_video(ffprobe: str, path: Path) -> dict[str, object]:
 
 def selected_states(state: str) -> tuple[str, ...]:
     states = load_states()
-    return states if state == "all" else (state,)
+    if state == "all":
+        return states
+    if state not in states:
+        raise ValueError(f"Unknown action for profile {ACTIVE_PROFILE_ID}: {state}")
+    return (state,)
 
 
 def existing_runtime_states(states: tuple[str, ...]) -> tuple[str, ...]:
@@ -566,12 +600,14 @@ def check_sources(ffprobe: str | None, states: tuple[str, ...], skip_missing: bo
                 "OK: "
                 f"{path.relative_to(ROOT)} {width}x{height} duration={duration} "
                 f"provider={source_meta['provider']} mask={source_meta['maskPreset']} "
-                f"matte={source_meta['mattePreset']} crop={source_meta['cropPreset']}"
+                f"matte={source_meta['mattePreset']} crop={source_meta['cropPreset']} "
+                f"layout={source_meta['layoutPreset'] or 'auto'}"
             )
         else:
             print(
                 f"OK: {path.relative_to(ROOT)} provider={info['provider']} "
-                f"mask={info['maskPreset']} matte={info['mattePreset']} crop={info['cropPreset']}"
+                f"mask={info['maskPreset']} matte={info['mattePreset']} "
+                f"crop={info['cropPreset']} layout={info['layoutPreset'] or 'auto'}"
             )
 
     return 1 if failures else 0
@@ -622,11 +658,17 @@ def crop_filters(crop_preset: str) -> list[str]:
     raise ValueError(f"unknown crop preset: {crop_preset}")
 
 
-def color_prep_filters(mask_preset: str, crop_preset: str) -> list[str]:
+def pad_color_for_matte(matte_preset: str) -> str:
+    if matte_preset == "blue_screen":
+        return "0x005bff"
+    return "white"
+
+
+def color_prep_filters(mask_preset: str, crop_preset: str, matte_preset: str) -> list[str]:
     filters = [
         *crop_filters(crop_preset),
         f"scale={CANVAS_SIZE[0]}:{CANVAS_SIZE[1]}:force_original_aspect_ratio=decrease",
-        f"pad={CANVAS_SIZE[0]}:{CANVAS_SIZE[1]}:(ow-iw)/2:(oh-ih)/2:white",
+        f"pad={CANVAS_SIZE[0]}:{CANVAS_SIZE[1]}:(ow-iw)/2:(oh-ih)/2:{pad_color_for_matte(matte_preset)}",
     ]
     if mask_preset == "jimeng_corner":
         filters.extend(
@@ -637,6 +679,10 @@ def color_prep_filters(mask_preset: str, crop_preset: str) -> list[str]:
         )
     elif mask_preset == "kling_corner":
         filters.append("drawbox=x=iw-440:y=ih-150:w=440:h=150:color=white:t=fill")
+    elif mask_preset == "doubao_ai_corner":
+        filters.append(f"drawbox=x=iw*0.66:y=ih*0.76:w=iw*0.34:h=ih*0.24:color={pad_color_for_matte(matte_preset)}:t=fill")
+    elif mask_preset == "doubao_ai_dynamic":
+        pass
     elif mask_preset != "none":
         raise ValueError(f"unknown mask preset: {mask_preset}")
     filters.append("format=rgb24")
@@ -695,6 +741,21 @@ def neutral_floor_matte_filter() -> str:
     )
 
 
+def blue_screen_matte_filter() -> str:
+    # Treat only connected blue-screen pixels as background so disconnected
+    # blue-green costume ornaments, tassels, and shadows survive the key pass.
+    background_candidate = (
+        "if(gte(b(X,Y),145)*lte(r(X,Y),105)*lte(g(X,Y),185)*"
+        "gte(b(X,Y)-r(X,Y),58)*gte(b(X,Y)-g(X,Y),32),0,255)"
+    )
+    return ",".join(
+        [
+            f"geq=r='{background_candidate}':g='{background_candidate}':b='{background_candidate}'",
+            *marker_to_alpha_filters(),
+        ]
+    )
+
+
 def connected_background_matte_filter(background_similarity: float, matte_preset: str) -> str:
     if matte_preset == "white":
         return white_connected_matte_filter(background_similarity)
@@ -702,7 +763,22 @@ def connected_background_matte_filter(background_similarity: float, matte_preset
         return sleep_props_matte_filter()
     if matte_preset == "neutral_floor":
         return neutral_floor_matte_filter()
+    if matte_preset == "blue_screen":
+        return blue_screen_matte_filter()
     raise ValueError(f"unknown matte preset: {matte_preset}")
+
+
+def alpha_refine_filter(matte_preset: str) -> str:
+    if matte_preset == "blue_screen":
+        return "dilation,dilation,dilation,dilation,dilation,dilation,boxblur=1:1"
+    return "null"
+
+
+def blue_screen_matte_python() -> Path:
+    candidate = ROOT / "skills" / "white-bg-video-matting" / ".venv" / "bin" / "python"
+    if candidate.exists():
+        return candidate
+    return Path(shutil.which("python3") or "python3")
 
 
 def cleanup_condition(state: str, boxes: tuple[AlphaBox, ...]) -> str:
@@ -804,11 +880,34 @@ def write_matte_video(
         raise FileNotFoundError(f"missing source video: {source.relative_to(ROOT)}")
 
     output.parent.mkdir(parents=True, exist_ok=True)
-    color_filter = ",".join(color_prep_filters(mask_preset, crop_preset))
+    if matte_preset == "blue_screen":
+        run(
+            [
+                str(blue_screen_matte_python()),
+                str(ROOT / "scripts" / "blue_screen_matte.py"),
+                "--ffmpeg",
+                ffmpeg,
+                "--input",
+                str(source),
+                "--output",
+                str(output),
+                "--width",
+                str(CANVAS_SIZE[0]),
+                "--height",
+                str(CANVAS_SIZE[1]),
+                "--mask-preset",
+                mask_preset,
+                "--state",
+                state,
+            ]
+        )
+        return output
+
+    color_filter = ",".join(color_prep_filters(mask_preset, crop_preset, matte_preset))
     matte_filter = connected_background_matte_filter(background_similarity, matte_preset)
     video_filter = (
         f"[0:v]{color_filter},split[color][masksrc];"
-        f"[masksrc]{matte_filter}[alpha];"
+        f"[masksrc]{matte_filter},{alpha_refine_filter(matte_preset)}[alpha];"
         f"[color][alpha]alphamerge,{transparent_cleanup_filter(state)},format=rgba"
     )
     run(
@@ -932,6 +1031,11 @@ def measure_alignment_bbox(ffmpeg: str, state: str, video: Path) -> BoundingBox 
 
 
 def layout_preset_for_state(state: str) -> LayoutPreset:
+    layout_preset = source_info(state).get("layoutPreset")
+    if layout_preset:
+        if layout_preset not in LAYOUT_PRESETS:
+            raise ValueError(f"unknown layout preset for {state}: {layout_preset}")
+        return LAYOUT_PRESETS[layout_preset]
     return LAYOUT_PRESETS.get(state, LayoutPreset(target_bottom=1724, min_scale=0.98, max_scale=1.04))
 
 
@@ -939,7 +1043,7 @@ def required_margin(crop_start: int, crop_length: int, canvas_length: int) -> in
     return max(640, 64 - crop_start, crop_start + crop_length - canvas_length + 64)
 
 
-def layout_transform_filter(state: str, bbox: BoundingBox | None) -> str:
+def layout_transform_filter(state: str, bbox: BoundingBox | None, matte_preset: str) -> str:
     if bbox is None:
         return "format=yuva420p"
 
@@ -957,16 +1061,16 @@ def layout_transform_filter(state: str, bbox: BoundingBox | None) -> str:
     margin_x = required_margin(crop_x, crop_width, CANVAS_SIZE[0])
     margin_y = required_margin(crop_y, crop_height, CANVAS_SIZE[1])
 
-    return ",".join(
-        [
-            "format=rgba",
-            f"pad={CANVAS_SIZE[0] + margin_x * 2}:{CANVAS_SIZE[1] + margin_y * 2}:{margin_x}:{margin_y}:color=0x00000000",
-            f"crop={crop_width}:{crop_height}:{crop_x + margin_x}:{crop_y + margin_y}",
-            f"scale={CANVAS_SIZE[0]}:{CANVAS_SIZE[1]}:flags=lanczos",
-            final_transparent_cleanup_filter(state),
-            "format=yuva420p",
-        ]
-    )
+    filters = [
+        "format=rgba",
+        f"pad={CANVAS_SIZE[0] + margin_x * 2}:{CANVAS_SIZE[1] + margin_y * 2}:{margin_x}:{margin_y}:color=0x00000000",
+        f"crop={crop_width}:{crop_height}:{crop_x + margin_x}:{crop_y + margin_y}",
+        f"scale={CANVAS_SIZE[0]}:{CANVAS_SIZE[1]}:flags=lanczos",
+    ]
+    if matte_preset != "blue_screen":
+        filters.append(final_transparent_cleanup_filter(state))
+    filters.append("format=yuva420p")
+    return ",".join(filters)
 
 
 def convert_state(
@@ -1001,12 +1105,18 @@ def convert_state(
                 "-i",
                 str(matte_video),
                 "-vf",
-                layout_transform_filter(state, bbox),
+                layout_transform_filter(state, bbox, matte_preset),
                 "-an",
                 "-c:v",
                 "libvpx-vp9",
                 "-pix_fmt",
                 "yuva420p",
+                "-deadline",
+                "good",
+                "-cpu-used",
+                "4",
+                "-row-mt",
+                "1",
                 "-auto-alt-ref",
                 "0",
                 "-b:v",
@@ -1052,7 +1162,7 @@ def write_overlay_contact_sheet(ffmpeg: str, state: str, webm: Path, background:
 
 
 def write_alpha_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
-    output = ROOT / "docs" / "pb2" / "qa" / "alpha" / f"{state}_alpha.png"
+    output = pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "alpha" / f"{state}_alpha.png"
     output.parent.mkdir(parents=True, exist_ok=True)
     video_filter = (
         "fps=1,alphaextract,"
@@ -1081,6 +1191,44 @@ def write_alpha_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
     )
 
 
+def write_checkerboard_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
+    output = pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "checker" / f"{state}_checker.png"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    checker = (
+        "nullsrc=s=1536x1728:r=1:d=60,"
+        "geq=r='if(mod(floor(X/96)+floor(Y/96),2),210,255)':"
+        "g='if(mod(floor(X/96)+floor(Y/96),2),210,255)':"
+        "b='if(mod(floor(X/96)+floor(Y/96),2),210,255)'"
+    )
+    video_filter = (
+        f"{checker}[bg];"
+        "[0:v]fps=1,format=rgba[fg];"
+        "[bg][fg]overlay=shortest=1:format=auto,"
+        "scale=256:288:force_original_aspect_ratio=decrease,"
+        "pad=256:288:(ow-iw)/2:(oh-ih)/2:white,"
+        "tile=6x1:color=white"
+    )
+    run(
+        [
+            ffmpeg,
+            "-y",
+            "-v",
+            "error",
+            "-c:v",
+            "libvpx-vp9",
+            "-i",
+            str(webm),
+            "-filter_complex",
+            video_filter,
+            "-frames:v",
+            "1",
+            "-update",
+            "1",
+            str(output),
+        ]
+    )
+
+
 def write_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
     write_overlay_contact_sheet(ffmpeg, state, webm, "white", qa_contact_sheet(state))
     write_overlay_contact_sheet(
@@ -1088,30 +1236,31 @@ def write_contact_sheet(ffmpeg: str, state: str, webm: Path) -> None:
         state,
         webm,
         "magenta",
-        ROOT / "docs" / "pb2" / "qa" / "magenta" / f"{state}_magenta.png",
+        pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "magenta" / f"{state}_magenta.png",
     )
     write_overlay_contact_sheet(
         ffmpeg,
         state,
         webm,
         "black",
-        ROOT / "docs" / "pb2" / "qa" / "black" / f"{state}_black.png",
+        pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "black" / f"{state}_black.png",
     )
     write_overlay_contact_sheet(
         ffmpeg,
         state,
         webm,
         "0x00ffff",
-        ROOT / "docs" / "pb2" / "qa" / "cyan" / f"{state}_cyan.png",
+        pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "cyan" / f"{state}_cyan.png",
     )
     write_overlay_contact_sheet(
         ffmpeg,
         state,
         webm,
         "gray",
-        ROOT / "docs" / "pb2" / "qa" / "gray" / f"{state}_gray.png",
+        pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "gray" / f"{state}_gray.png",
     )
     write_alpha_contact_sheet(ffmpeg, state, webm)
+    write_checkerboard_contact_sheet(ffmpeg, state, webm)
 
 
 def write_fallback_keyframe(ffmpeg: str, state: str, webm: Path) -> Path:
@@ -1139,10 +1288,29 @@ def write_fallback_keyframe(ffmpeg: str, state: str, webm: Path) -> Path:
     return output
 
 
+def write_visual_metrics(state: str, keyframe: Path) -> None:
+    metrics_root = pet_profiles.qa_root(ACTIVE_PROFILE_ID) / "metrics"
+    run(
+        [
+            str(blue_screen_matte_python()),
+            str(ROOT / "scripts" / "asset_visual_metrics.py"),
+            "--state",
+            state,
+            "--input",
+            str(keyframe),
+            "--output-json",
+            str(metrics_root / f"{state}.json"),
+            "--watermark-crop",
+            str(metrics_root / f"{state}_watermark_roi.png"),
+        ]
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="PB2 source video validation and WebM conversion.")
     parser.add_argument("command", choices=("check", "convert"))
-    parser.add_argument("--state", choices=("all",) + load_states(), default="all")
+    parser.add_argument("--profile", default=pet_profiles.DEFAULT_PROFILE_ID, help="Pet profile id.")
+    parser.add_argument("--state", default="all")
     parser.add_argument("--ffmpeg-path")
     parser.add_argument("--ffprobe-path")
     parser.add_argument("--crf", type=int, default=32)
@@ -1177,7 +1345,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    states = selected_states(args.state)
+    configure_profile(args.profile)
+    try:
+        states = selected_states(args.state)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     if args.command == "check":
         ffprobe = args.ffprobe_path or shutil.which("ffprobe")
@@ -1194,6 +1366,7 @@ def main() -> int:
         webm = convert_state(ffmpeg, state, args.crf, args.background_similarity, mask_preset, matte_preset, crop_preset)
         write_contact_sheet(ffmpeg, state, webm)
         keyframe = write_fallback_keyframe(ffmpeg, state, webm)
+        write_visual_metrics(state, keyframe)
         provider = source_info(state)["provider"]
         print(
             f"WROTE: {webm.relative_to(ROOT)} provider={provider} "

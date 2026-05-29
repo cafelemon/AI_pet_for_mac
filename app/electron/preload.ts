@@ -15,6 +15,7 @@ import type {
   MouseHitRegion,
   MouseMode,
   MouseHitTestPoint,
+  PetProfileState,
   ReminderNotification,
   ReminderRecord,
   ShortcutBinding,
@@ -34,9 +35,11 @@ const TASK_NOTIFICATION_CHANNEL = 'task:notification';
 const TASKS_UPDATED_CHANNEL = 'task:updated';
 const MOUSE_HIT_TEST_SAMPLE_CHANNEL = 'mouse:hit-test-sample';
 const MANUAL_RENDER_SELECTION_CHANNEL = 'render:manual-selection';
+const PET_PROFILE_CHANGED_CHANNEL = 'pet-profile:changed';
 const CONTROL_CENTER_MODULE_CHANNEL = 'control-center:module';
 const SHORTCUTS_UPDATED_CHANNEL = 'shortcuts:updated';
 const INPUT_PERMISSION_STATUS_CHANNEL = 'input-permission:status';
+const INTERACTION_DRAG_ACTIVE_CHANNEL = 'interaction:drag-active';
 const COMPANION_COMMANDS = new Set<CompanionCommand>([
   'next-state',
   'previous-state',
@@ -65,6 +68,8 @@ const companionAPI: CompanionAPI = {
   getStatesConfig: () => ipcRenderer.invoke('config:get-states') as Promise<StatesConfig>,
   getActionRegistryConfig: () =>
     ipcRenderer.invoke('config:get-action-registry') as Promise<ActionRegistryConfig>,
+  getPetProfiles: () => ipcRenderer.invoke('pet-profile:list') as Promise<PetProfileState>,
+  setPetProfile: (profileId: string) => ipcRenderer.invoke('pet-profile:set', profileId) as Promise<PetProfileState>,
   assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => ipcRenderer.invoke('codex:get-runtime-state') as Promise<CodexRenderState | null>,
   getReminderRuntimeState: () =>
@@ -144,6 +149,16 @@ const companionAPI: CompanionAPI = {
       ipcRenderer.removeListener(MANUAL_RENDER_SELECTION_CHANNEL, listener);
     };
   },
+  onPetProfileChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: PetProfileState): void => {
+      callback(state);
+    };
+
+    ipcRenderer.on(PET_PROFILE_CHANGED_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(PET_PROFILE_CHANGED_CHANNEL, listener);
+    };
+  },
   onControlCenterModule: (callback) => {
     const listener = (_event: IpcRendererEvent, module: ControlCenterModule): void => {
       callback(module);
@@ -172,6 +187,16 @@ const companionAPI: CompanionAPI = {
     ipcRenderer.on(INPUT_PERMISSION_STATUS_CHANNEL, listener);
     return () => {
       ipcRenderer.removeListener(INPUT_PERMISSION_STATUS_CHANNEL, listener);
+    };
+  },
+  onInteractionDragActive: (callback) => {
+    const listener = (_event: IpcRendererEvent, active: boolean): void => {
+      callback(active);
+    };
+
+    ipcRenderer.on(INTERACTION_DRAG_ACTIVE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(INTERACTION_DRAG_ACTIVE_CHANNEL, listener);
     };
   },
   onCodexRuntimeState: (callback) => {
