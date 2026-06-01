@@ -13206,7 +13206,9 @@ const STAND_TO_DUCK_SIT = "stand_to_duck_sit";
 const DUCK_SIT_TO_STAND = "duck_sit_to_stand";
 const DUCK_SIT_TO_SLEEP = "duck_sit_to_sleep";
 const WAKE_FROM_SLEEP_TRANSITION = "sleep_to_stand";
-const DRAG_HOLD_LIFT = "drag_hold_lift";
+const DRAG_START_EVENT = "drag_start";
+const DRAG_HOLD_EVENT = "drag_hold";
+const DRAG_END_EVENT = "drag_end";
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
 const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1e3;
@@ -13218,9 +13220,16 @@ const EMPTY_TASK_SNAPSHOT = {
 };
 const MODULE_LABELS = {
   status: "状态",
+  integrations: "AI 接入",
   tasks: "任务",
   reminders: "提醒",
   settings: "设置"
+};
+const RUNTIME_SOURCE_PRIORITY = {
+  reminder: 0,
+  task: 0,
+  agent: 1,
+  codex: 2
 };
 function isCompanionState(state) {
   return RENDER_STATES.includes(state);
@@ -13308,6 +13317,12 @@ function codexBubbleMessage(codexState, state) {
   }
   return BUBBLE_MESSAGES[state];
 }
+function runtimeBubbleMessage(agentState, codexState, state) {
+  if (agentState && !agentState.isStale) {
+    return agentState.message ?? BUBBLE_MESSAGES[state];
+  }
+  return codexBubbleMessage(codexState, state);
+}
 function statePriority(state, statesConfig) {
   return statesConfig.priorities[state] ?? 999;
 }
@@ -13336,6 +13351,18 @@ function weightedRandomKeyframe(keyframes) {
 function hasFolders(catalog, folders) {
   return folders.every((folder) => catalog.byFolder.has(folder));
 }
+function interactionAction(rules, eventName) {
+  if (!rules?.enabled) {
+    return null;
+  }
+  return rules.rules[eventName]?.action ?? null;
+}
+function canInterruptRuntime(rule, runtimeOverride) {
+  if (!rule) {
+    return false;
+  }
+  return rule.interruptLevel === "high" || !runtimeOverride;
+}
 function availableKeyframes(catalog, folders) {
   return folders.map((folder) => catalog.byFolder.get(folder)).filter((keyframe) => Boolean(keyframe));
 }
@@ -13353,7 +13380,7 @@ function renderedStateForMotion(folder, desiredState) {
 }
 function moduleFromSearch() {
   const module = new URLSearchParams(window.location.search).get("module");
-  return module === "tasks" || module === "reminders" || module === "settings" || module === "status" ? module : "status";
+  return module === "tasks" || module === "reminders" || module === "settings" || module === "integrations" || module === "status" ? module : "status";
 }
 function useCompanionCatalog(companionConfig, statesConfig, actionRegistry) {
   const keyframes = reactExports.useMemo(() => {
@@ -13372,6 +13399,7 @@ function useCompanionCatalog(companionConfig, statesConfig, actionRegistry) {
 }
 function useRuntimeState() {
   const [codexState, setCodexState] = reactExports.useState(null);
+  const [agentState, setAgentState] = reactExports.useState(null);
   const [reminderState, setReminderState] = reactExports.useState(null);
   const [reminders, setReminders] = reactExports.useState([]);
   const [taskNotification, setTaskNotification] = reactExports.useState(null);
@@ -13385,8 +13413,9 @@ function useRuntimeState() {
   reactExports.useEffect(() => {
     let cancelled = false;
     async function load() {
-      const [nextCodex, nextReminderState, nextReminders, nextTaskNotification, nextTasks] = await Promise.all([
+      const [nextCodex, nextAgent, nextReminderState, nextReminders, nextTaskNotification, nextTasks] = await Promise.all([
         window.companionAPI.getCodexRuntimeState(),
+        window.companionAPI.getAgentRuntimeState(),
         window.companionAPI.getReminderRuntimeState(),
         window.companionAPI.listReminders(),
         window.companionAPI.getTaskNotification(),
@@ -13394,6 +13423,7 @@ function useRuntimeState() {
       ]);
       if (!cancelled) {
         setCodexState(nextCodex);
+        setAgentState(nextAgent);
         setReminderState(nextReminderState);
         setReminders(nextReminders);
         setTaskNotification(nextTaskNotification);
@@ -13406,30 +13436,37 @@ function useRuntimeState() {
     };
   }, []);
   reactExports.useEffect(() => window.companionAPI.onCodexRuntimeState(setCodexState), []);
+  reactExports.useEffect(() => window.companionAPI.onAgentRuntimeState(setAgentState), []);
   reactExports.useEffect(() => window.companionAPI.onReminderRuntimeState(setReminderState), []);
   reactExports.useEffect(() => window.companionAPI.onRemindersUpdated(setReminders), []);
   reactExports.useEffect(() => window.companionAPI.onTaskNotification(setTaskNotification), []);
   reactExports.useEffect(() => window.companionAPI.onTasksUpdated(setTasks), []);
-  return { codexState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
+  return { codexState, agentState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
 }
 function PetRenderer({
   companionConfig,
   statesConfig,
   manualSelection,
   codexState,
+  agentState,
   reminderState,
   taskNotification,
   interactionDragActive,
+  interactionRules,
   keyframes,
   catalog,
   onHitRegionsChange
 }) {
   const [idleMotionFolder, setIdleMotionFolder] = reactExports.useState(null);
+  const [interactionMotionFolder, setInteractionMotionFolder] = reactExports.useState(null);
   const [idlePosture, setIdlePosture] = reactExports.useState("standing");
   const [autoSleep, setAutoSleep] = reactExports.useState(false);
   const idleMotionTimerRef = reactExports.useRef(null);
   const motionQueueRef = reactExports.useRef([]);
   const previousDesiredStateRef = reactExports.useRef(null);
+  const previousDragActiveRef = reactExports.useRef(false);
+  const pointerInsideRef = reactExports.useRef(false);
+  const interactionCooldownsRef = reactExports.useRef({});
   const clearIdleMotionTimer = reactExports.useCallback(() => {
     if (idleMotionTimerRef.current !== null) {
       window.clearTimeout(idleMotionTimerRef.current);
@@ -13453,11 +13490,15 @@ function PetRenderer({
     setIdleMotionFolder(null);
   }, []);
   const codexOverride = codexState && codexState.state !== "idle" ? codexState : null;
+  const agentOverride = agentState && agentState.state !== "idle" && !agentState.isStale ? agentState : null;
   const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
   const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
   const runtimeCandidates = [];
   if (codexOverride) {
     runtimeCandidates.push({ source: "codex", state: codexOverride.state });
+  }
+  if (agentOverride) {
+    runtimeCandidates.push({ source: "agent", state: agentOverride.state });
   }
   if (reminderOverride) {
     runtimeCandidates.push({ source: "reminder", state: reminderOverride.state });
@@ -13466,7 +13507,7 @@ function PetRenderer({
     runtimeCandidates.push({ source: "task", state: taskOverride.state });
   }
   const runtimeOverride = runtimeCandidates.sort(
-    (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
+    (left, right) => RUNTIME_SOURCE_PRIORITY[left.source] - RUNTIME_SOURCE_PRIORITY[right.source] || statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
   )[0] ?? null;
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
   const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
@@ -13488,17 +13529,65 @@ function PetRenderer({
   const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === "idle" ? selection.variant : null;
   const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : void 0;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : void 0;
-  const interactionDragKeyframe = interactionDragActive ? catalog.byFolder.get(DRAG_HOLD_LIFT) : void 0;
+  const dragHoldAction = interactionAction(interactionRules, DRAG_HOLD_EVENT);
+  const interactionMotionKeyframe = !runtimeOverride && interactionMotionFolder ? catalog.byFolder.get(interactionMotionFolder) : void 0;
+  const interactionDragKeyframe = interactionDragActive && dragHoldAction ? catalog.byFolder.get(dragHoldAction) : void 0;
   const postureIdleKeyframe = !idleMotionFolder && renderedState === "idle" && !renderedVariant && idlePosture === "duck_sit" ? catalog.byFolder.get(DUCK_SIT_IDLE) : void 0;
-  const activeKeyframe = interactionDragKeyframe ?? manualActionKeyframe ?? activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
+  const activeKeyframe = interactionMotionKeyframe ?? interactionDragKeyframe ?? manualActionKeyframe ?? activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
   reactExports.useEffect(() => {
-    if (!interactionDragKeyframe) {
+    if (!interactionMotionKeyframe && !interactionDragKeyframe) {
       return;
     }
     clearIdleMotionTimer();
     clearMotionSequence();
-  }, [clearIdleMotionTimer, clearMotionSequence, interactionDragKeyframe]);
+  }, [clearIdleMotionTimer, clearMotionSequence, interactionDragKeyframe, interactionMotionKeyframe]);
+  const startInteractionMotion = reactExports.useCallback(
+    (eventName) => {
+      const rule = interactionRules?.rules[eventName];
+      const action = rule?.action;
+      if (!interactionRules?.enabled || !rule || !action || !catalog.byFolder.has(action)) {
+        return false;
+      }
+      if (!canInterruptRuntime(rule, runtimeOverride)) {
+        return false;
+      }
+      if (interactionMotionFolder && rule.interruptLevel !== "high" && eventName !== "mouse_leave") {
+        return false;
+      }
+      const now = Date.now();
+      const lastAt = interactionCooldownsRef.current[eventName] ?? 0;
+      if (rule.cooldownMs > 0 && now - lastAt < rule.cooldownMs) {
+        return false;
+      }
+      interactionCooldownsRef.current[eventName] = now;
+      clearIdleMotionTimer();
+      clearMotionSequence();
+      setInteractionMotionFolder(action);
+      return true;
+    },
+    [
+      catalog,
+      clearIdleMotionTimer,
+      clearMotionSequence,
+      interactionMotionFolder,
+      interactionRules,
+      runtimeOverride
+    ]
+  );
+  reactExports.useEffect(() => {
+    const wasDragging = previousDragActiveRef.current;
+    previousDragActiveRef.current = interactionDragActive;
+    if (interactionDragActive && !wasDragging) {
+      startInteractionMotion(DRAG_START_EVENT);
+      return;
+    }
+    if (!interactionDragActive && wasDragging) {
+      if (!startInteractionMotion(DRAG_END_EVENT)) {
+        setInteractionMotionFolder(null);
+      }
+    }
+  }, [interactionDragActive, startInteractionMotion]);
   reactExports.useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
     if (desiredState === "sleep") {
@@ -13576,6 +13665,15 @@ function PetRenderer({
     return () => window.clearTimeout(timer);
   }, [activeKeyframe, activeMotionDurationMs, idleMotionFolder]);
   const handleMotionComplete = reactExports.useCallback(() => {
+    if (interactionMotionFolder) {
+      const hoverRule = interactionRules?.rules.mouse_hover;
+      if (interactionMotionFolder === hoverRule?.action && pointerInsideRef.current && hoverRule.holdAction && !runtimeOverride && catalog.byFolder.has(hoverRule.holdAction)) {
+        setInteractionMotionFolder(hoverRule.holdAction);
+        return;
+      }
+      setInteractionMotionFolder(null);
+      return;
+    }
     const completedFolder = idleMotionFolder;
     if (!completedFolder) {
       return;
@@ -13591,24 +13689,46 @@ function PetRenderer({
       return;
     }
     setIdleMotionFolder(null);
-  }, [idleMotionFolder]);
+  }, [catalog, idleMotionFolder, interactionMotionFolder, interactionRules, runtimeOverride]);
   if (!activeKeyframe) {
     return null;
   }
-  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : codexBubbleMessage(runtimeOverride?.source === "codex" ? codexOverride : null, renderedState);
+  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : runtimeBubbleMessage(
+    runtimeOverride?.source === "agent" ? agentOverride : null,
+    runtimeOverride?.source === "codex" ? codexOverride : null,
+    renderedState
+  );
+  const handlePointerEnter = reactExports.useCallback(() => {
+    pointerInsideRef.current = true;
+    startInteractionMotion("mouse_hover");
+  }, [startInteractionMotion]);
+  const handlePointerLeave = reactExports.useCallback(() => {
+    pointerInsideRef.current = false;
+    if (!startInteractionMotion("mouse_leave")) {
+      setInteractionMotionFolder(null);
+    }
+  }, [startInteractionMotion]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "companion-shell", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "companion-stage", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      Companion,
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
       {
-        keyframe: activeKeyframe,
-        canvas: companionConfig.renderer.keyframeCanvas,
-        state: renderedState,
-        onHitTesterChange: () => void 0,
-        onHitRegionsChange,
-        onMotionComplete: handleMotionComplete
-      },
-      `${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? "dragging" : selection.replayId ?? 0}`
-    ) }),
+        className: "companion-stage",
+        onPointerEnter: handlePointerEnter,
+        onPointerLeave: handlePointerLeave,
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          Companion,
+          {
+            keyframe: activeKeyframe,
+            canvas: companionConfig.renderer.keyframeCanvas,
+            state: renderedState,
+            onHitTesterChange: () => void 0,
+            onHitRegionsChange,
+            onMotionComplete: handleMotionComplete
+          },
+          `${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? "dragging" : selection.replayId ?? 0}`
+        )
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Bubble, { state: renderedState, message: bubbleMessage, actions: null })
   ] });
 }
@@ -13616,20 +13736,23 @@ function PetApp() {
   const [companionConfig, setCompanionConfig] = reactExports.useState(null);
   const [statesConfig, setStatesConfig] = reactExports.useState(null);
   const [actionRegistry, setActionRegistry] = reactExports.useState(null);
+  const [interactionRules, setInteractionRules] = reactExports.useState(null);
   const [manualSelection, setManualSelection] = reactExports.useState(null);
   const [interactionDragActive, setInteractionDragActive] = reactExports.useState(false);
-  const { codexState, reminderState, taskNotification } = useRuntimeState();
+  const { codexState, agentState, reminderState, taskNotification } = useRuntimeState();
   const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
   const loadPetConfig = reactExports.useCallback(async () => {
-    const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextSelection] = await Promise.all([
+    const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextInteractionRules, nextSelection] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
       window.companionAPI.getActionRegistryConfig(),
+      window.companionAPI.getInteractionRulesConfig(),
       window.companionAPI.getManualRenderSelection()
     ]);
     setCompanionConfig(nextCompanionConfig);
     setStatesConfig(nextStatesConfig);
     setActionRegistry(nextActionRegistry);
+    setInteractionRules(nextInteractionRules);
     setManualSelection(nextSelection);
   }, []);
   reactExports.useEffect(() => {
@@ -13666,9 +13789,11 @@ function PetApp() {
       statesConfig,
       manualSelection,
       codexState,
+      agentState,
       reminderState,
       taskNotification,
       interactionDragActive,
+      interactionRules,
       keyframes,
       catalog,
       onHitRegionsChange: publishHitRegions
@@ -13757,6 +13882,110 @@ function SettingsModule({
     ] }, shortcut.id)) })
   ] });
 }
+function confirmationStatusLabel(status) {
+  return {
+    pending: "等待确认",
+    allowed: "已允许",
+    denied: "已拒绝",
+    cancelled: "已取消",
+    expired: "已过期"
+  }[status];
+}
+function IntegrationsModule({
+  protocolStatus,
+  confirmation,
+  onRespondConfirmation
+}) {
+  const mcpCommand = "node scripts/companion_mcp_server.mjs";
+  const agentState = protocolStatus?.agentState ?? null;
+  const activeConfirmation = confirmation ?? protocolStatus?.confirmation ?? null;
+  const [confirmationError, setConfirmationError] = reactExports.useState(null);
+  const statusText = protocolStatus ? protocolStatus.enabled ? protocolStatus.running ? "运行中" : "已启用，等待启动" : "未启用" : "加载中";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "settings-module", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "control-module__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "V1.1" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: "AI 接入" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: protocolStatus?.running ? "integration-card integration-card--active" : "integration-card", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "Companion Protocol" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__meta", children: [
+        statusText,
+        " · v",
+        protocolStatus?.protocolVersion ?? 1,
+        " · ",
+        protocolStatus?.transport ?? "unix-socket"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-facts", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "App ",
+          protocolStatus?.appVersion ?? "-"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Socket ",
+          protocolStatus?.socketPath ? "ready" : "-"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Discovery ",
+          protocolStatus?.discoveryPath ? "ready" : "-"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-facts", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Agent ",
+          agentState?.status ?? "-"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Runtime ",
+          agentState?.state ?? "-"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Expires ",
+          agentState?.expiresAt ? new Date(agentState.expiresAt).toLocaleTimeString() : "-"
+        ] })
+      ] }),
+      protocolStatus?.lastError ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: protocolStatus.lastError }) : null
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-card", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "MCP stdio" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: mcpCommand }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_profile_list / companion_profile_capabilities / companion_profile_select" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: activeConfirmation?.status === "pending" ? "integration-card integration-card--attention" : "integration-card", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "确认请求" }),
+      activeConfirmation ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "confirmation-card__title", children: activeConfirmation.title }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: activeConfirmation.message }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-facts", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: confirmationStatusLabel(activeConfirmation.status) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+            "Expires ",
+            new Date(activeConfirmation.expiresAt).toLocaleTimeString()
+          ] })
+        ] }),
+        activeConfirmation.status === "pending" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "confirmation-actions", children: [
+          ["allow", "允许"],
+          ["deny", "拒绝"],
+          ["cancel", "取消"]
+        ].map(([action, label]) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: action === "allow" ? "mini-button mini-button--primary" : "mini-button",
+            type: "button",
+            onClick: () => {
+              setConfirmationError(null);
+              onRespondConfirmation(activeConfirmation.requestId, action).catch((error) => {
+                setConfirmationError(error instanceof Error ? error.message : "确认失败");
+              });
+            },
+            children: label
+          },
+          action
+        )) }) : null,
+        confirmationError ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: confirmationError }) : null
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "暂无待确认请求" })
+    ] })
+  ] });
+}
 function ControlCenterApp() {
   const [companionConfig, setCompanionConfig] = reactExports.useState(null);
   const [statesConfig, setStatesConfig] = reactExports.useState(null);
@@ -13767,6 +13996,8 @@ function ControlCenterApp() {
   const [shortcuts, setShortcuts] = reactExports.useState([]);
   const [permissionStatus, setPermissionStatus] = reactExports.useState("unknown");
   const [petProfiles, setPetProfiles] = reactExports.useState(null);
+  const [protocolStatus, setProtocolStatus] = reactExports.useState(null);
+  const [agentConfirmation, setAgentConfirmation] = reactExports.useState(null);
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
   const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
   const loadControlCenter = reactExports.useCallback(async () => {
@@ -13778,7 +14009,9 @@ function ControlCenterApp() {
       nextSelection,
       nextShortcuts,
       nextPermissionStatus,
-      nextPetProfiles
+      nextPetProfiles,
+      nextProtocolStatus,
+      nextAgentConfirmation
     ] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
@@ -13787,7 +14020,9 @@ function ControlCenterApp() {
       window.companionAPI.getManualRenderSelection(),
       window.companionAPI.getShortcuts(),
       window.companionAPI.getInputPermissionStatus(),
-      window.companionAPI.getPetProfiles()
+      window.companionAPI.getPetProfiles(),
+      window.companionAPI.getCompanionProtocolStatus(),
+      window.companionAPI.getAgentConfirmation()
     ]);
     setCompanionConfig(nextCompanionConfig);
     setStatesConfig(nextStatesConfig);
@@ -13797,6 +14032,8 @@ function ControlCenterApp() {
     setShortcuts(nextShortcuts);
     setPermissionStatus(nextPermissionStatus);
     setPetProfiles(nextPetProfiles);
+    setProtocolStatus(nextProtocolStatus);
+    setAgentConfirmation(nextAgentConfirmation);
   }, []);
   reactExports.useEffect(() => {
     let cancelled = false;
@@ -13820,6 +14057,12 @@ function ControlCenterApp() {
   reactExports.useEffect(() => window.companionAPI.onControlCenterModule(setActiveModule), []);
   reactExports.useEffect(() => window.companionAPI.onShortcutsUpdated(setShortcuts), []);
   reactExports.useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
+  reactExports.useEffect(() => window.companionAPI.onCompanionProtocolStatus(setProtocolStatus), []);
+  reactExports.useEffect(() => window.companionAPI.onAgentConfirmation(setAgentConfirmation), []);
+  const respondAgentConfirmation = reactExports.useCallback(async (requestId, action) => {
+    setAgentConfirmation(await window.companionAPI.respondAgentConfirmation(requestId, action));
+    setProtocolStatus(await window.companionAPI.getCompanionProtocolStatus());
+  }, []);
   const setWindowScale = reactExports.useCallback(
     (scale) => {
       if (!companionConfig) {
@@ -13974,6 +14217,14 @@ function ControlCenterApp() {
           onDeleteTask: deleteTask,
           onDismissNotification: dismissTaskNotification,
           onClose: () => window.companionAPI.closeControlCenter()
+        }
+      ) : null,
+      activeModule === "integrations" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        IntegrationsModule,
+        {
+          confirmation: agentConfirmation,
+          onRespondConfirmation: respondAgentConfirmation,
+          protocolStatus
         }
       ) : null,
       activeModule === "settings" ? /* @__PURE__ */ jsxRuntimeExports.jsx(

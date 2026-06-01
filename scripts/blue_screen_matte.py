@@ -131,6 +131,10 @@ def doubao_watermark_rois(width: int, height: int, mask_preset: str) -> tuple[tu
             (0, 0, int(width * 0.48), int(height * 0.22)),
             (int(width * 0.52), 0, width, int(height * 0.22)),
         )
+    if mask_preset == "guofeng_mouse_cursor":
+        return (
+            (int(width * 0.58), int(height * 0.84), width, height),
+        )
     return ()
 
 
@@ -187,7 +191,7 @@ def watermark_text_mask(roi: np.ndarray, key_color: np.ndarray) -> np.ndarray:
 
 
 def remove_doubao_watermark(rgb: np.ndarray, key_color: np.ndarray, mask_preset: str) -> np.ndarray:
-    if mask_preset not in {"doubao_ai_corner", "doubao_ai_dynamic", "doubao_ai_main_states"}:
+    if mask_preset not in {"doubao_ai_corner", "doubao_ai_dynamic", "doubao_ai_main_states", "guofeng_mouse_cursor"}:
         return rgb
 
     cleaned = rgb.copy()
@@ -549,7 +553,8 @@ def main() -> int:
         for (name, _array), stabilized_array in zip(processed_frames, arrays):
             output_path = alpha_dir / name
             output_path.parent.mkdir(parents=True, exist_ok=True)
-            cleaned_array = remove_small_alpha_islands(stabilized_array)
+            island_min_area = 1000 if args.mask_preset == "guofeng_mouse_cursor" else 240
+            cleaned_array = remove_small_alpha_islands(stabilized_array, min_area=island_min_area)
             Image.fromarray(cleaned_array, mode="RGBA").save(output_path)
 
         run(

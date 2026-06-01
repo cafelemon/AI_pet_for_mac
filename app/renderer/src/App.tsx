@@ -11,13 +11,20 @@ import type { StatusActionGroup } from '../components/StatusPanel';
 import type {
   ActionDefinition,
   ActionRegistryConfig,
+  AgentConfirmation,
+  AgentConfirmationAction,
+  AgentRenderState,
   CodexRenderState,
   CompanionConfig,
+  CompanionProtocolStatus,
   CompanionState,
   ControlCenterModule,
   CreateReminderInput,
   CreateTaskInput,
   InputPermissionStatus,
+  InteractionEventName,
+  InteractionRule,
+  InteractionRulesConfig,
   KeyframeDescriptor,
   ManualRenderSelection,
   MouseHitRegion,
@@ -95,7 +102,9 @@ const STAND_TO_CODING = 'stand_to_coding';
 const CODING_TO_STAND = 'coding_to_stand';
 const STAND_TO_THINKING = 'stand_to_thinking';
 const THINKING_TO_STAND = 'thinking_to_stand';
-const DRAG_HOLD_LIFT = 'drag_hold_lift';
+const DRAG_START_EVENT: InteractionEventName = 'drag_start';
+const DRAG_HOLD_EVENT: InteractionEventName = 'drag_hold';
+const DRAG_END_EVENT: InteractionEventName = 'drag_end';
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
 const SLEEP_ENTRY_FROM_DUCK_SIT = [DUCK_SIT_TO_SLEEP];
 const AUTO_SLEEP_DELAY_MS = 30 * 60 * 1000;
@@ -107,10 +116,17 @@ const EMPTY_TASK_SNAPSHOT: TaskCenterSnapshot = {
 };
 const MODULE_LABELS: Record<ControlCenterModule, string> = {
   status: '状态',
+  integrations: 'AI 接入',
   tasks: '任务',
   reminders: '提醒',
   settings: '设置'
 };
+const RUNTIME_SOURCE_PRIORITY = {
+  reminder: 0,
+  task: 0,
+  agent: 1,
+  codex: 2
+} as const;
 
 type IdlePosture = 'standing' | 'duck_sit';
 
@@ -234,6 +250,17 @@ function codexBubbleMessage(codexState: CodexRenderState | null, state: Companio
   return BUBBLE_MESSAGES[state];
 }
 
+function runtimeBubbleMessage(
+  agentState: AgentRenderState | null,
+  codexState: CodexRenderState | null,
+  state: CompanionState
+): string | null {
+  if (agentState && !agentState.isStale) {
+    return agentState.message ?? BUBBLE_MESSAGES[state];
+  }
+  return codexBubbleMessage(codexState, state);
+}
+
 function statePriority(state: CompanionState, statesConfig: StatesConfig): number {
   return statesConfig.priorities[state] ?? 999;
 }
@@ -269,6 +296,20 @@ function hasFolders(catalog: CompanionCatalog, folders: string[]): boolean {
   return folders.every((folder) => catalog.byFolder.has(folder));
 }
 
+function interactionAction(rules: InteractionRulesConfig | null, eventName: InteractionEventName): string | null {
+  if (!rules?.enabled) {
+    return null;
+  }
+  return rules.rules[eventName]?.action ?? null;
+}
+
+function canInterruptRuntime(rule: InteractionRule | undefined, runtimeOverride: unknown): boolean {
+  if (!rule) {
+    return false;
+  }
+  return rule.interruptLevel === 'high' || !runtimeOverride;
+}
+
 function availableKeyframes(catalog: CompanionCatalog, folders: string[]): KeyframeDescriptor[] {
   return folders
     .map((folder) => catalog.byFolder.get(folder))
@@ -293,7 +334,7 @@ function renderedStateForMotion(folder: string | null, desiredState: CompanionSt
 
 function moduleFromSearch(): ControlCenterModule {
   const module = new URLSearchParams(window.location.search).get('module');
-  return module === 'tasks' || module === 'reminders' || module === 'settings' || module === 'status'
+  return module === 'tasks' || module === 'reminders' || module === 'settings' || module === 'integrations' || module === 'status'
     ? module
     : 'status';
 }
@@ -323,6 +364,7 @@ function useCompanionCatalog(
 
 function useRuntimeState(): {
   codexState: CodexRenderState | null;
+  agentState: AgentRenderState | null;
   reminderState: ReminderNotification | null;
   reminders: ReminderRecord[];
   taskNotification: TaskNotification | null;
@@ -331,6 +373,7 @@ function useRuntimeState(): {
   refreshTasks: () => Promise<void>;
 } {
   const [codexState, setCodexState] = useState<CodexRenderState | null>(null);
+  const [agentState, setAgentState] = useState<AgentRenderState | null>(null);
   const [reminderState, setReminderState] = useState<ReminderNotification | null>(null);
   const [reminders, setReminders] = useState<ReminderRecord[]>([]);
   const [taskNotification, setTaskNotification] = useState<TaskNotification | null>(null);
@@ -347,8 +390,9 @@ function useRuntimeState(): {
     let cancelled = false;
 
     async function load(): Promise<void> {
-      const [nextCodex, nextReminderState, nextReminders, nextTaskNotification, nextTasks] = await Promise.all([
+      const [nextCodex, nextAgent, nextReminderState, nextReminders, nextTaskNotification, nextTasks] = await Promise.all([
         window.companionAPI.getCodexRuntimeState(),
+        window.companionAPI.getAgentRuntimeState(),
         window.companionAPI.getReminderRuntimeState(),
         window.companionAPI.listReminders(),
         window.companionAPI.getTaskNotification(),
@@ -357,6 +401,7 @@ function useRuntimeState(): {
 
       if (!cancelled) {
         setCodexState(nextCodex);
+        setAgentState(nextAgent);
         setReminderState(nextReminderState);
         setReminders(nextReminders);
         setTaskNotification(nextTaskNotification);
@@ -371,12 +416,13 @@ function useRuntimeState(): {
   }, []);
 
   useEffect(() => window.companionAPI.onCodexRuntimeState(setCodexState), []);
+  useEffect(() => window.companionAPI.onAgentRuntimeState(setAgentState), []);
   useEffect(() => window.companionAPI.onReminderRuntimeState(setReminderState), []);
   useEffect(() => window.companionAPI.onRemindersUpdated(setReminders), []);
   useEffect(() => window.companionAPI.onTaskNotification(setTaskNotification), []);
   useEffect(() => window.companionAPI.onTasksUpdated(setTasks), []);
 
-  return { codexState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
+  return { codexState, agentState, reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks };
 }
 
 function PetRenderer({
@@ -384,9 +430,11 @@ function PetRenderer({
   statesConfig,
   manualSelection,
   codexState,
+  agentState,
   reminderState,
   taskNotification,
   interactionDragActive,
+  interactionRules,
   keyframes,
   catalog,
   onHitRegionsChange
@@ -395,19 +443,25 @@ function PetRenderer({
   statesConfig: StatesConfig;
   manualSelection: ManualRenderSelection | null;
   codexState: CodexRenderState | null;
+  agentState: AgentRenderState | null;
   reminderState: ReminderNotification | null;
   taskNotification: TaskNotification | null;
   interactionDragActive: boolean;
+  interactionRules: InteractionRulesConfig | null;
   keyframes: KeyframeDescriptor[];
   catalog: CompanionCatalog;
   onHitRegionsChange: (regions: MouseHitRegion[]) => void;
 }): ReactElement | null {
   const [idleMotionFolder, setIdleMotionFolder] = useState<string | null>(null);
+  const [interactionMotionFolder, setInteractionMotionFolder] = useState<string | null>(null);
   const [idlePosture, setIdlePosture] = useState<IdlePosture>('standing');
   const [autoSleep, setAutoSleep] = useState(false);
   const idleMotionTimerRef = useRef<number | null>(null);
   const motionQueueRef = useRef<string[]>([]);
   const previousDesiredStateRef = useRef<CompanionState | null>(null);
+  const previousDragActiveRef = useRef(false);
+  const pointerInsideRef = useRef(false);
+  const interactionCooldownsRef = useRef<Partial<Record<InteractionEventName, number>>>({});
   const clearIdleMotionTimer = useCallback((): void => {
     if (idleMotionTimerRef.current !== null) {
       window.clearTimeout(idleMotionTimerRef.current);
@@ -433,12 +487,16 @@ function PetRenderer({
   }, []);
 
   const codexOverride = codexState && codexState.state !== 'idle' ? codexState : null;
+  const agentOverride = agentState && agentState.state !== 'idle' && !agentState.isStale ? agentState : null;
   const reminderOverride = reminderState && !reminderState.isStale ? reminderState : null;
   const taskOverride = taskNotification && !taskNotification.isStale ? taskNotification : null;
-  const runtimeCandidates: Array<{ source: 'codex' | 'reminder' | 'task'; state: CompanionState }> = [];
+  const runtimeCandidates: Array<{ source: keyof typeof RUNTIME_SOURCE_PRIORITY; state: CompanionState }> = [];
 
   if (codexOverride) {
     runtimeCandidates.push({ source: 'codex', state: codexOverride.state });
+  }
+  if (agentOverride) {
+    runtimeCandidates.push({ source: 'agent', state: agentOverride.state });
   }
   if (reminderOverride) {
     runtimeCandidates.push({ source: 'reminder', state: reminderOverride.state });
@@ -449,7 +507,9 @@ function PetRenderer({
 
   const runtimeOverride =
     runtimeCandidates.sort(
-      (left, right) => statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
+      (left, right) =>
+        RUNTIME_SOURCE_PRIORITY[left.source] - RUNTIME_SOURCE_PRIORITY[right.source] ||
+        statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
     )[0] ?? null;
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
   const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
@@ -478,12 +538,17 @@ function PetRenderer({
   const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === 'idle' ? selection.variant : null;
   const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : undefined;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : undefined;
-  const interactionDragKeyframe = interactionDragActive ? catalog.byFolder.get(DRAG_HOLD_LIFT) : undefined;
+  const dragHoldAction = interactionAction(interactionRules, DRAG_HOLD_EVENT);
+  const interactionMotionKeyframe =
+    !runtimeOverride && interactionMotionFolder ? catalog.byFolder.get(interactionMotionFolder) : undefined;
+  const interactionDragKeyframe =
+    interactionDragActive && dragHoldAction ? catalog.byFolder.get(dragHoldAction) : undefined;
   const postureIdleKeyframe =
     !idleMotionFolder && renderedState === 'idle' && !renderedVariant && idlePosture === 'duck_sit'
       ? catalog.byFolder.get(DUCK_SIT_IDLE)
       : undefined;
   const activeKeyframe =
+    interactionMotionKeyframe ??
     interactionDragKeyframe ??
     manualActionKeyframe ??
     activeMotionKeyframe ??
@@ -495,13 +560,65 @@ function PetRenderer({
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
 
   useEffect(() => {
-    if (!interactionDragKeyframe) {
+    if (!interactionMotionKeyframe && !interactionDragKeyframe) {
       return;
     }
 
     clearIdleMotionTimer();
     clearMotionSequence();
-  }, [clearIdleMotionTimer, clearMotionSequence, interactionDragKeyframe]);
+  }, [clearIdleMotionTimer, clearMotionSequence, interactionDragKeyframe, interactionMotionKeyframe]);
+
+  const startInteractionMotion = useCallback(
+    (eventName: InteractionEventName): boolean => {
+      const rule = interactionRules?.rules[eventName];
+      const action = rule?.action;
+      if (!interactionRules?.enabled || !rule || !action || !catalog.byFolder.has(action)) {
+        return false;
+      }
+      if (!canInterruptRuntime(rule, runtimeOverride)) {
+        return false;
+      }
+      if (interactionMotionFolder && rule.interruptLevel !== 'high' && eventName !== 'mouse_leave') {
+        return false;
+      }
+
+      const now = Date.now();
+      const lastAt = interactionCooldownsRef.current[eventName] ?? 0;
+      if (rule.cooldownMs > 0 && now - lastAt < rule.cooldownMs) {
+        return false;
+      }
+
+      interactionCooldownsRef.current[eventName] = now;
+      clearIdleMotionTimer();
+      clearMotionSequence();
+      setInteractionMotionFolder(action);
+      return true;
+    },
+    [
+      catalog,
+      clearIdleMotionTimer,
+      clearMotionSequence,
+      interactionMotionFolder,
+      interactionRules,
+      runtimeOverride
+    ]
+  );
+
+  useEffect(() => {
+    const wasDragging = previousDragActiveRef.current;
+    previousDragActiveRef.current = interactionDragActive;
+
+    if (interactionDragActive && !wasDragging) {
+      startInteractionMotion(DRAG_START_EVENT);
+      return;
+    }
+
+    if (!interactionDragActive && wasDragging) {
+      if (!startInteractionMotion(DRAG_END_EVENT)) {
+        setInteractionMotionFolder(null);
+      }
+    }
+  }, [interactionDragActive, startInteractionMotion]);
 
   useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
@@ -602,6 +719,23 @@ function PetRenderer({
   }, [activeKeyframe, activeMotionDurationMs, idleMotionFolder]);
 
   const handleMotionComplete = useCallback((): void => {
+    if (interactionMotionFolder) {
+      const hoverRule = interactionRules?.rules.mouse_hover;
+      if (
+        interactionMotionFolder === hoverRule?.action &&
+        pointerInsideRef.current &&
+        hoverRule.holdAction &&
+        !runtimeOverride &&
+        catalog.byFolder.has(hoverRule.holdAction)
+      ) {
+        setInteractionMotionFolder(hoverRule.holdAction);
+        return;
+      }
+
+      setInteractionMotionFolder(null);
+      return;
+    }
+
     const completedFolder = idleMotionFolder;
 
     if (!completedFolder) {
@@ -621,7 +755,7 @@ function PetRenderer({
     }
 
     setIdleMotionFolder(null);
-  }, [idleMotionFolder]);
+  }, [catalog, idleMotionFolder, interactionMotionFolder, interactionRules, runtimeOverride]);
 
   if (!activeKeyframe) {
     return null;
@@ -630,13 +764,31 @@ function PetRenderer({
   const bubbleMessage =
     runtimeOverride?.source === 'reminder' && reminderOverride
       ? reminderOverride.message
-      : runtimeOverride?.source === 'task' && taskOverride
-        ? taskOverride.message
-        : codexBubbleMessage(runtimeOverride?.source === 'codex' ? codexOverride : null, renderedState);
+        : runtimeOverride?.source === 'task' && taskOverride
+          ? taskOverride.message
+        : runtimeBubbleMessage(
+            runtimeOverride?.source === 'agent' ? agentOverride : null,
+            runtimeOverride?.source === 'codex' ? codexOverride : null,
+            renderedState
+          );
+  const handlePointerEnter = useCallback((): void => {
+    pointerInsideRef.current = true;
+    startInteractionMotion('mouse_hover');
+  }, [startInteractionMotion]);
+  const handlePointerLeave = useCallback((): void => {
+    pointerInsideRef.current = false;
+    if (!startInteractionMotion('mouse_leave')) {
+      setInteractionMotionFolder(null);
+    }
+  }, [startInteractionMotion]);
 
   return (
     <main className="companion-shell">
-      <div className="companion-stage">
+      <div
+        className="companion-stage"
+        onPointerEnter={handlePointerEnter}
+        onPointerLeave={handlePointerLeave}
+      >
         <Companion
           key={`${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? 'dragging' : (selection.replayId ?? 0)}`}
           keyframe={activeKeyframe}
@@ -656,22 +808,25 @@ function PetApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
   const [actionRegistry, setActionRegistry] = useState<ActionRegistryConfig | null>(null);
+  const [interactionRules, setInteractionRules] = useState<InteractionRulesConfig | null>(null);
   const [manualSelection, setManualSelection] = useState<ManualRenderSelection | null>(null);
   const [interactionDragActive, setInteractionDragActive] = useState(false);
-  const { codexState, reminderState, taskNotification } = useRuntimeState();
+  const { codexState, agentState, reminderState, taskNotification } = useRuntimeState();
   const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
   const loadPetConfig = useCallback(async (): Promise<void> => {
-    const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextSelection] = await Promise.all([
+    const [nextCompanionConfig, nextStatesConfig, nextActionRegistry, nextInteractionRules, nextSelection] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
       window.companionAPI.getActionRegistryConfig(),
+      window.companionAPI.getInteractionRulesConfig(),
       window.companionAPI.getManualRenderSelection()
     ]);
 
     setCompanionConfig(nextCompanionConfig);
     setStatesConfig(nextStatesConfig);
     setActionRegistry(nextActionRegistry);
+    setInteractionRules(nextInteractionRules);
     setManualSelection(nextSelection);
   }, []);
 
@@ -708,14 +863,16 @@ function PetApp(): ReactElement | null {
   }
 
   return (
-    <PetRenderer
+      <PetRenderer
       companionConfig={companionConfig}
       statesConfig={statesConfig}
       manualSelection={manualSelection}
       codexState={codexState}
+      agentState={agentState}
       reminderState={reminderState}
       taskNotification={taskNotification}
       interactionDragActive={interactionDragActive}
+      interactionRules={interactionRules}
       keyframes={keyframes}
       catalog={catalog}
       onHitRegionsChange={publishHitRegions}
@@ -837,6 +994,111 @@ function SettingsModule({
   );
 }
 
+function confirmationStatusLabel(status: AgentConfirmation['status']): string {
+  return {
+    pending: '等待确认',
+    allowed: '已允许',
+    denied: '已拒绝',
+    cancelled: '已取消',
+    expired: '已过期'
+  }[status];
+}
+
+function IntegrationsModule({
+  protocolStatus,
+  confirmation,
+  onRespondConfirmation
+}: {
+  protocolStatus: CompanionProtocolStatus | null;
+  confirmation: AgentConfirmation | null;
+  onRespondConfirmation: (requestId: string, action: AgentConfirmationAction) => Promise<void>;
+}): ReactElement {
+  const mcpCommand = 'node scripts/companion_mcp_server.mjs';
+  const agentState = protocolStatus?.agentState ?? null;
+  const activeConfirmation = confirmation ?? protocolStatus?.confirmation ?? null;
+  const [confirmationError, setConfirmationError] = useState<string | null>(null);
+  const statusText = protocolStatus
+    ? protocolStatus.enabled
+      ? protocolStatus.running
+        ? '运行中'
+        : '已启用，等待启动'
+      : '未启用'
+    : '加载中';
+
+  return (
+    <section className="settings-module">
+      <header className="control-module__header">
+        <p className="status-panel__eyebrow">V1.1</p>
+        <h1 className="status-panel__title">AI 接入</h1>
+      </header>
+
+      <div className={protocolStatus?.running ? 'integration-card integration-card--active' : 'integration-card'}>
+        <p className="settings-module__title">Companion Protocol</p>
+        <p className="settings-module__meta">
+          {statusText} · v{protocolStatus?.protocolVersion ?? 1} · {protocolStatus?.transport ?? 'unix-socket'}
+        </p>
+        <div className="integration-facts">
+          <span>App {protocolStatus?.appVersion ?? '-'}</span>
+          <span>Socket {protocolStatus?.socketPath ? 'ready' : '-'}</span>
+          <span>Discovery {protocolStatus?.discoveryPath ? 'ready' : '-'}</span>
+        </div>
+        <div className="integration-facts">
+          <span>Agent {agentState?.status ?? '-'}</span>
+          <span>Runtime {agentState?.state ?? '-'}</span>
+          <span>Expires {agentState?.expiresAt ? new Date(agentState.expiresAt).toLocaleTimeString() : '-'}</span>
+        </div>
+        {protocolStatus?.lastError ? <p className="settings-module__error">{protocolStatus.lastError}</p> : null}
+      </div>
+
+      <div className="integration-card">
+        <p className="settings-module__title">MCP stdio</p>
+        <p className="settings-module__meta">{mcpCommand}</p>
+        <p className="settings-module__meta">可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_profile_list / companion_profile_capabilities / companion_profile_select</p>
+      </div>
+
+      <div className={activeConfirmation?.status === 'pending' ? 'integration-card integration-card--attention' : 'integration-card'}>
+        <p className="settings-module__title">确认请求</p>
+        {activeConfirmation ? (
+          <>
+            <p className="confirmation-card__title">{activeConfirmation.title}</p>
+            <p className="settings-module__meta">{activeConfirmation.message}</p>
+            <div className="integration-facts">
+              <span>{confirmationStatusLabel(activeConfirmation.status)}</span>
+              <span>Expires {new Date(activeConfirmation.expiresAt).toLocaleTimeString()}</span>
+            </div>
+            {activeConfirmation.status === 'pending' ? (
+              <div className="confirmation-actions">
+                {[
+                  ['allow', '允许'],
+                  ['deny', '拒绝'],
+                  ['cancel', '取消']
+                ].map(([action, label]) => (
+                  <button
+                    className={action === 'allow' ? 'mini-button mini-button--primary' : 'mini-button'}
+                    key={action}
+                    type="button"
+                    onClick={() => {
+                      setConfirmationError(null);
+                      onRespondConfirmation(activeConfirmation.requestId, action as AgentConfirmationAction).catch((error: unknown) => {
+                        setConfirmationError(error instanceof Error ? error.message : '确认失败');
+                      });
+                    }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {confirmationError ? <p className="settings-module__error">{confirmationError}</p> : null}
+          </>
+        ) : (
+          <p className="settings-module__meta">暂无待确认请求</p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function ControlCenterApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
@@ -847,6 +1109,8 @@ function ControlCenterApp(): ReactElement | null {
   const [shortcuts, setShortcuts] = useState<ShortcutBinding[]>([]);
   const [permissionStatus, setPermissionStatus] = useState<InputPermissionStatus>('unknown');
   const [petProfiles, setPetProfiles] = useState<PetProfileState | null>(null);
+  const [protocolStatus, setProtocolStatus] = useState<CompanionProtocolStatus | null>(null);
+  const [agentConfirmation, setAgentConfirmation] = useState<AgentConfirmation | null>(null);
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
   const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
@@ -859,7 +1123,9 @@ function ControlCenterApp(): ReactElement | null {
       nextSelection,
       nextShortcuts,
       nextPermissionStatus,
-      nextPetProfiles
+      nextPetProfiles,
+      nextProtocolStatus,
+      nextAgentConfirmation
     ] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
@@ -868,7 +1134,9 @@ function ControlCenterApp(): ReactElement | null {
       window.companionAPI.getManualRenderSelection(),
       window.companionAPI.getShortcuts(),
       window.companionAPI.getInputPermissionStatus(),
-      window.companionAPI.getPetProfiles()
+      window.companionAPI.getPetProfiles(),
+      window.companionAPI.getCompanionProtocolStatus(),
+      window.companionAPI.getAgentConfirmation()
     ]);
 
     setCompanionConfig(nextCompanionConfig);
@@ -879,6 +1147,8 @@ function ControlCenterApp(): ReactElement | null {
     setShortcuts(nextShortcuts);
     setPermissionStatus(nextPermissionStatus);
     setPetProfiles(nextPetProfiles);
+    setProtocolStatus(nextProtocolStatus);
+    setAgentConfirmation(nextAgentConfirmation);
   }, []);
 
   useEffect(() => {
@@ -906,6 +1176,13 @@ function ControlCenterApp(): ReactElement | null {
   useEffect(() => window.companionAPI.onControlCenterModule(setActiveModule), []);
   useEffect(() => window.companionAPI.onShortcutsUpdated(setShortcuts), []);
   useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
+  useEffect(() => window.companionAPI.onCompanionProtocolStatus(setProtocolStatus), []);
+  useEffect(() => window.companionAPI.onAgentConfirmation(setAgentConfirmation), []);
+
+  const respondAgentConfirmation = useCallback(async (requestId: string, action: AgentConfirmationAction): Promise<void> => {
+    setAgentConfirmation(await window.companionAPI.respondAgentConfirmation(requestId, action));
+    setProtocolStatus(await window.companionAPI.getCompanionProtocolStatus());
+  }, []);
 
   const setWindowScale = useCallback(
     (scale: number): void => {
@@ -1083,6 +1360,13 @@ function ControlCenterApp(): ReactElement | null {
             onDeleteTask={deleteTask}
             onDismissNotification={dismissTaskNotification}
             onClose={() => window.companionAPI.closeControlCenter()}
+          />
+        ) : null}
+        {activeModule === 'integrations' ? (
+          <IntegrationsModule
+            confirmation={agentConfirmation}
+            onRespondConfirmation={respondAgentConfirmation}
+            protocolStatus={protocolStatus}
           />
         ) : null}
         {activeModule === 'settings' ? (

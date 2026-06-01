@@ -171,9 +171,44 @@
       "durationMs": 3042,
       "idleWeight": 0.65
     },
+    "mouse_hover_look": {
+      "playback": "one_shot",
+      "durationMs": 2875,
+      "idleWeight": 0
+    },
+    "mouse_shy_loop": {
+      "playback": "loop",
+      "durationMs": 3375,
+      "idleWeight": 0
+    },
+    "mouse_leave_back": {
+      "playback": "one_shot",
+      "durationMs": 2875,
+      "idleWeight": 0
+    },
+    "click_head_happy": {
+      "playback": "one_shot",
+      "durationMs": 2400,
+      "idleWeight": 0
+    },
+    "click_body_confused": {
+      "playback": "one_shot",
+      "durationMs": 2600,
+      "idleWeight": 0
+    },
+    "drag_start_lift": {
+      "playback": "one_shot",
+      "durationMs": 1600,
+      "idleWeight": 0
+    },
     "drag_hold_lift": {
       "playback": "loop",
       "durationMs": 4042,
+      "idleWeight": 0
+    },
+    "drag_end_dizzy": {
+      "playback": "one_shot",
+      "durationMs": 2200,
       "idleWeight": 0
     },
     "bath_idle": {
@@ -223,6 +258,13 @@
     "stand_to_sword_dance",
     "sword_dance_to_sword_rain",
     "sit_to_talisman_cast",
+    "mouse_hover_look",
+    "mouse_shy_loop",
+    "mouse_leave_back",
+    "click_head_happy",
+    "click_body_confused",
+    "drag_start_lift",
+    "drag_end_dizzy",
     "drag_hold_lift"
   ],
   "priorities": {

@@ -1,6 +1,6 @@
 # Desktop AI Companion
 
-当前项目版本冻结为 `V1.0.0`。这个版本代表现有本地桌宠运行时、真人桌宠素材包、古风 AI 角色素材框架、控制中心、任务/提醒/Codex 状态接入和资产校验链路的基线。
+当前项目版本为 `V1.1.8`。`V1.0.0` 冻结了现有本地桌宠运行时、真人桌宠素材包、古风 AI 角色素材框架、控制中心、任务/提醒/Codex 状态接入和资产校验链路；`V1.1.0` 新增本地 AI/Agent companion protocol，`V1.1.7` 新增安全上下文摘要、活动记录和视频供给台账，`V1.1.8` 新增 profile 能力声明。
 
 ## Product Direction
 
@@ -22,11 +22,13 @@ Desktop AI Companion 不是单纯的消息提醒桌宠。当前阶段的明显�
 npm install
 npm run dev
 npm run typecheck
+npm run agent:contract
 npm run build
 npm run asset:check:strict
 python3 scripts/asset_check.py --strict --webm-strict
 python3 scripts/pb2_video_pipeline.py check --skip-missing
 npm run motion:progress
+node scripts/companion_mcp_server.mjs
 ```
 
 ## Docs
@@ -40,6 +42,10 @@ npm run motion:progress
 - Process and progress log: `docs/06_progress.md`
 - Version naming rule: `docs/07_name_rule.md`
 - Decisions: `docs/08_decisions.md`
+- MCP capability blueprint: `docs/09_mcp_capability_blueprint.md`
+- Video supply progress: `docs/10_video_supply_progress.md`
+
+`V1.1.8` 之后，agent 可通过 `companion_profile_capabilities` 查询当前 profile 的 ready 能力、缺失视频动作和分发预留边界；L4 事件流 `companion.events.subscribe` 尚未实现，保留为后续 TODO。
 
 Generated operational reports live under `docs/generated/` so the root docs folder stays focused on the current product plan.
 

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "enabled": true,
+  "rules": {
+    "mouse_hover": {
+      "action": "mouse_hover_look",
+      "holdAction": "mouse_shy_loop",
+      "cooldownMs": 600,
+      "interruptLevel": "low",
+      "returnToPrevious": true
+    },
+    "mouse_leave": {
+      "action": "mouse_leave_back",
+      "cooldownMs": 600,
+      "interruptLevel": "low",
+      "returnToPrevious": true
+    }
+  },
+  "guards": {
+    "sleep": {
+      "block": [
+        "mouse_hover",
+        "mouse_leave"
+      ]
+    },
+    "transition": {
+      "blockInterruptLevels": [
+        "low"
+      ]
+    },
+    "event": {
+      "blockInterruptLevels": [
+        "low",
+        "medium"
+      ]
+    }
+  }
+}

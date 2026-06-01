@@ -3,14 +3,19 @@ import type { IpcRendererEvent } from 'electron';
 
 import type {
   ActionRegistryConfig,
+  AgentConfirmation,
+  AgentConfirmationAction,
+  AgentRenderState,
   CodexRenderState,
   CompanionAPI,
   CompanionCommand,
   CompanionConfig,
+  CompanionProtocolStatus,
   ControlCenterModule,
   CreateReminderInput,
   CreateTaskInput,
   InputPermissionStatus,
+  InteractionRulesConfig,
   ManualRenderSelection,
   MouseHitRegion,
   MouseMode,
@@ -29,6 +34,9 @@ import type {
 
 const COMPANION_COMMAND_CHANNEL = 'companion:command';
 const CODEX_RUNTIME_STATE_CHANNEL = 'codex:runtime-state';
+const AGENT_RUNTIME_STATE_CHANNEL = 'agent:runtime-state';
+const AGENT_CONFIRMATION_CHANNEL = 'agent:confirmation';
+const COMPANION_PROTOCOL_STATUS_CHANNEL = 'companion-protocol:status';
 const REMINDER_RUNTIME_STATE_CHANNEL = 'reminder:runtime-state';
 const REMINDERS_UPDATED_CHANNEL = 'reminder:updated';
 const TASK_NOTIFICATION_CHANNEL = 'task:notification';
@@ -68,10 +76,18 @@ const companionAPI: CompanionAPI = {
   getStatesConfig: () => ipcRenderer.invoke('config:get-states') as Promise<StatesConfig>,
   getActionRegistryConfig: () =>
     ipcRenderer.invoke('config:get-action-registry') as Promise<ActionRegistryConfig>,
+  getInteractionRulesConfig: () =>
+    ipcRenderer.invoke('config:get-interaction-rules') as Promise<InteractionRulesConfig>,
   getPetProfiles: () => ipcRenderer.invoke('pet-profile:list') as Promise<PetProfileState>,
   setPetProfile: (profileId: string) => ipcRenderer.invoke('pet-profile:set', profileId) as Promise<PetProfileState>,
   assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => ipcRenderer.invoke('codex:get-runtime-state') as Promise<CodexRenderState | null>,
+  getAgentRuntimeState: () => ipcRenderer.invoke('agent:get-runtime-state') as Promise<AgentRenderState | null>,
+  getAgentConfirmation: () => ipcRenderer.invoke('agent:get-confirmation') as Promise<AgentConfirmation | null>,
+  respondAgentConfirmation: (requestId: string, action: AgentConfirmationAction) =>
+    ipcRenderer.invoke('agent:respond-confirmation', requestId, action) as Promise<AgentConfirmation | null>,
+  getCompanionProtocolStatus: () =>
+    ipcRenderer.invoke('companion-protocol:get-status') as Promise<CompanionProtocolStatus>,
   getReminderRuntimeState: () =>
     ipcRenderer.invoke('reminders:get-runtime-state') as Promise<ReminderNotification | null>,
   listReminders: () => ipcRenderer.invoke('reminders:list') as Promise<ReminderRecord[]>,
@@ -207,6 +223,36 @@ const companionAPI: CompanionAPI = {
     ipcRenderer.on(CODEX_RUNTIME_STATE_CHANNEL, listener);
     return () => {
       ipcRenderer.removeListener(CODEX_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onAgentRuntimeState: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: AgentRenderState | null): void => {
+      callback(state);
+    };
+
+    ipcRenderer.on(AGENT_RUNTIME_STATE_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(AGENT_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onAgentConfirmation: (callback) => {
+    const listener = (_event: IpcRendererEvent, confirmation: AgentConfirmation | null): void => {
+      callback(confirmation);
+    };
+
+    ipcRenderer.on(AGENT_CONFIRMATION_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(AGENT_CONFIRMATION_CHANNEL, listener);
+    };
+  },
+  onCompanionProtocolStatus: (callback) => {
+    const listener = (_event: IpcRendererEvent, status: CompanionProtocolStatus): void => {
+      callback(status);
+    };
+
+    ipcRenderer.on(COMPANION_PROTOCOL_STATUS_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(COMPANION_PROTOCOL_STATUS_CHANNEL, listener);
     };
   },
   onReminderRuntimeState: (callback) => {

@@ -4,16 +4,16 @@ This table is generated for profile `guofeng_ai` from its motion catalog and loc
 
 ## Summary
 
-- Total planned actions: 41
-- WebM complete: 16
+- Total planned actions: 42
+- WebM complete: 19
 - Source videos ready, pending WebM conversion: 0
-- Waiting for source videos: 25
+- Waiting for source videos: 23
 
 ## Progress Table
 
 | Stage | Category | Action | Playback | Runtime wired | Provider | Mask preset | Matte preset | Crop preset | Keyframe | Source video | WebM | Status | Source path |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| PB1 | 原有核心 | `idle` (idle) | `loop` | yes | guofeng_ai | `doubao_ai_dynamic` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/states/idle/base/source/idle_stand.mp4` |
+| PB1 | 原有核心 | `idle` (idle) | `loop` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/states/idle/base/source/idle_stand.mp4` |
 | Guofeng V1 | 古风待机 | `idle_cross_arm` (cross arm idle) | `loop` | yes | guofeng_ai | `none` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/states/idle/cross_arm/source/idle_cross_arm.mp4` |
 | Guofeng V1 | 姿态衔接 | `stand_to_cross_arm` (stand to cross arm) | `one_shot` | yes | guofeng_ai | `none` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/transitions/stand_to_cross_arm/source/stand_to_cross_arm.mp4` |
 | PB3.1 | 阅读主状态 | `reading` (reading) | `loop` | yes | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/states/reading/base/source/reading_source.mp4` |
@@ -41,8 +41,9 @@ This table is generated for profile `guofeng_ai` from its motion catalog and loc
 | Guofeng V1 | 古风炫技 | `sit_to_talisman_cast` (sit to talisman cast) | `one_shot` | yes | guofeng_ai | `none` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/transitions/sit_to_talisman_cast/source/sit_to_talisman_cast.mp4` |
 | PB3.1 | 待机小动作 | `idle_yawn` (yawn) | `one_shot` | yes | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/states/idle/yawn/source/idle_yawn_source.mp4` |
 | PB3.1 | 待机小动作 | `idle_hair` (hair) | `one_shot` | yes | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/states/idle/hair/source/idle_hair_source.mp4` |
-| P1-A | 用户交互 | `mouse_hover_look` (mouse hover look) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/source/mouse_hover_look_source.mp4` |
-| P1-A | 用户交互 | `mouse_leave_back` (mouse leave back) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/source/mouse_leave_back_source.mp4` |
+| V1.1.3 | 用户交互 | `mouse_hover_look` (mouse hover look) | `one_shot` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/source/mouse_hover_look_source.mp4` |
+| V1.1.3 | 用户交互 | `mouse_shy_loop` (mouse shy loop) | `loop` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/source/mouse_shy_loop.mp4` |
+| V1.1.3 | 用户交互 | `mouse_leave_back` (mouse leave back) | `one_shot` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/source/mouse_leave_back_source.mp4` |
 | P1-A | 用户交互 | `click_head_happy` (click head happy) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source/click_head_happy_source.mp4` |
 | P1-A | 用户交互 | `click_body_confused` (click body confused) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source/click_body_confused_source.mp4` |
 | P1-A | 用户交互 | `drag_start_lift` (drag start lift) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/drag_start_lift/source/drag_start_lift_source.mp4` |

@@ -1,6 +1,6 @@
 {
   "name": "desktop-ai-companion",
-  "version": "1.0.0",
+  "version": "1.1.8",
   "private": true,
   "description": "Desktop AI Companion project scaffold.",
   "main": "./out/main/index.js",
@@ -12,7 +12,8 @@
     "asset:check:strict": "python3 scripts/asset_check.py --strict",
     "pb2:keyframes": "python3 scripts/prepare_pb2_keyframes.py",
     "pb2:video:check": "python3 scripts/pb2_video_pipeline.py check --skip-missing",
-    "motion:progress": "python3 scripts/update_motion_progress.py --ensure-dirs"
+    "motion:progress": "python3 scripts/update_motion_progress.py --ensure-dirs",
+    "agent:contract": "node scripts/check_agent_protocol_contract.mjs"
   },
   "dependencies": {
     "react": "^19.2.6",

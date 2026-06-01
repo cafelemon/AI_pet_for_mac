@@ -8,6 +8,15 @@
       "successHoldMs": 4000,
       "errorHoldMs": 8000
     },
+    "companion_protocol": {
+      "enabled": true,
+      "discoveryPath": "~/.desktop-ai-companion/discovery/companion.json",
+      "socketPath": "~/.desktop-ai-companion/ipc/companion.sock",
+      "messageMaxChars": 80,
+      "cooldownMs": 1500,
+      "defaultTtlMs": 6000,
+      "maxTtlMs": 15000
+    },
     "weather_plugin": {
       "enabled": false
     },

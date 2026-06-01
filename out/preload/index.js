@@ -2,6 +2,9 @@
 const electron = require("electron");
 const COMPANION_COMMAND_CHANNEL = "companion:command";
 const CODEX_RUNTIME_STATE_CHANNEL = "codex:runtime-state";
+const AGENT_RUNTIME_STATE_CHANNEL = "agent:runtime-state";
+const AGENT_CONFIRMATION_CHANNEL = "agent:confirmation";
+const COMPANION_PROTOCOL_STATUS_CHANNEL = "companion-protocol:status";
 const REMINDER_RUNTIME_STATE_CHANNEL = "reminder:runtime-state";
 const REMINDERS_UPDATED_CHANNEL = "reminder:updated";
 const TASK_NOTIFICATION_CHANNEL = "task:notification";
@@ -34,10 +37,15 @@ const companionAPI = {
   getCompanionConfig: () => electron.ipcRenderer.invoke("config:get-companion"),
   getStatesConfig: () => electron.ipcRenderer.invoke("config:get-states"),
   getActionRegistryConfig: () => electron.ipcRenderer.invoke("config:get-action-registry"),
+  getInteractionRulesConfig: () => electron.ipcRenderer.invoke("config:get-interaction-rules"),
   getPetProfiles: () => electron.ipcRenderer.invoke("pet-profile:list"),
   setPetProfile: (profileId) => electron.ipcRenderer.invoke("pet-profile:set", profileId),
   assetUrl: (relativePath) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => electron.ipcRenderer.invoke("codex:get-runtime-state"),
+  getAgentRuntimeState: () => electron.ipcRenderer.invoke("agent:get-runtime-state"),
+  getAgentConfirmation: () => electron.ipcRenderer.invoke("agent:get-confirmation"),
+  respondAgentConfirmation: (requestId, action) => electron.ipcRenderer.invoke("agent:respond-confirmation", requestId, action),
+  getCompanionProtocolStatus: () => electron.ipcRenderer.invoke("companion-protocol:get-status"),
   getReminderRuntimeState: () => electron.ipcRenderer.invoke("reminders:get-runtime-state"),
   listReminders: () => electron.ipcRenderer.invoke("reminders:list"),
   createReminder: (input) => electron.ipcRenderer.invoke("reminders:create", input),
@@ -148,6 +156,33 @@ const companionAPI = {
     electron.ipcRenderer.on(CODEX_RUNTIME_STATE_CHANNEL, listener);
     return () => {
       electron.ipcRenderer.removeListener(CODEX_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onAgentRuntimeState: (callback) => {
+    const listener = (_event, state) => {
+      callback(state);
+    };
+    electron.ipcRenderer.on(AGENT_RUNTIME_STATE_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(AGENT_RUNTIME_STATE_CHANNEL, listener);
+    };
+  },
+  onAgentConfirmation: (callback) => {
+    const listener = (_event, confirmation) => {
+      callback(confirmation);
+    };
+    electron.ipcRenderer.on(AGENT_CONFIRMATION_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(AGENT_CONFIRMATION_CHANNEL, listener);
+    };
+  },
+  onCompanionProtocolStatus: (callback) => {
+    const listener = (_event, status) => {
+      callback(status);
+    };
+    electron.ipcRenderer.on(COMPANION_PROTOCOL_STATUS_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(COMPANION_PROTOCOL_STATUS_CHANNEL, listener);
     };
   },
   onReminderRuntimeState: (callback) => {

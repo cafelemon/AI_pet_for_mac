@@ -32,6 +32,7 @@
     "idle_yawn",
     "idle_hair",
     "mouse_hover_look",
+    "mouse_shy_loop",
     "mouse_leave_back",
     "click_head_happy",
     "click_body_confused",
@@ -383,10 +384,28 @@
       "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/source",
       "webmPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/webm/mouse_hover_look_loop.webm",
       "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/keyframes/mouse_hover_look_01.png",
-      "sourceVideoPaths": [],
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/source/mouse_hover_look_source.mp4"
+      ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
+      "protect": false,
+      "returnTo": "idle"
+    },
+    "mouse_shy_loop": {
+      "id": "mouse_shy_loop",
+      "type": "interaction",
+      "path": "assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop",
+      "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/source",
+      "webmPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/webm/mouse_shy_loop_loop.webm",
+      "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/keyframes/mouse_shy_loop_01.png",
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/source/mouse_shy_loop.mp4"
+      ],
+      "playback": "loop",
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },
@@ -397,10 +416,12 @@
       "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/source",
       "webmPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/webm/mouse_leave_back_loop.webm",
       "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/keyframes/mouse_leave_back_01.png",
-      "sourceVideoPaths": [],
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/source/mouse_leave_back_source.mp4"
+      ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },
@@ -411,7 +432,9 @@
       "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source",
       "webmPath": "assets/profiles/guofeng_ai/actions/interactions/click_head_happy/webm/click_head_happy_loop.webm",
       "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/click_head_happy/keyframes/click_head_happy_01.png",
-      "sourceVideoPaths": [],
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source/click_head_happy_source.mp4"
+      ],
       "playback": "one_shot",
       "runtime": false,
       "available": false,
@@ -425,7 +448,9 @@
       "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source",
       "webmPath": "assets/profiles/guofeng_ai/actions/interactions/click_body_confused/webm/click_body_confused_loop.webm",
       "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/click_body_confused/keyframes/click_body_confused_01.png",
-      "sourceVideoPaths": [],
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source/click_body_confused_source.mp4"
+      ],
       "playback": "one_shot",
       "runtime": false,
       "available": false,
@@ -455,7 +480,9 @@
       "sourceDir": "assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/source",
       "webmPath": "assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/webm/drag_end_dizzy_loop.webm",
       "fallbackPath": "assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/keyframes/drag_end_dizzy_01.png",
-      "sourceVideoPaths": [],
+      "sourceVideoPaths": [
+        "assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/source/drag_end_dizzy_source.mp4"
+      ],
       "playback": "one_shot",
       "runtime": false,
       "available": false,

@@ -29,6 +29,7 @@ MASK_PRESETS = (
     "doubao_ai_corner",
     "doubao_ai_dynamic",
     "doubao_ai_main_states",
+    "guofeng_mouse_cursor",
 )
 MATTE_PRESETS = ("auto", "white", "neutral_floor", "sleep_props", "blue_screen")
 CROP_PRESETS = ("auto", "none", "duck_sit_to_sleep", "sleep_to_stand")
@@ -130,6 +131,9 @@ LAYOUT_PRESETS: dict[str, LayoutPreset] = {
     # Standing-family states are aligned to the current accepted `idle_yawn`
     # runtime body size, not to the full motion union box.
     "idle": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "mouse_hover_look": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "mouse_shy_loop": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "mouse_leave_back": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
     "idle_hair": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.56),
     "idle_yawn": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.70, max_scale=0.82),
     "reading": LayoutPreset(target_cx=768, target_bottom=1724, target_height=1560, min_scale=1.03, max_scale=1.08),
@@ -164,6 +168,18 @@ LAYOUT_REFERENCE_PRESETS: dict[str, LayoutReferencePreset] = {
     # Measure only the main body lane so gestures, reminder UI, and jump
     # effects do not inflate the alignment size.
     "idle": LayoutReferencePreset(
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "mouse_hover_look": LayoutReferencePreset(
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "mouse_shy_loop": LayoutReferencePreset(
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "mouse_leave_back": LayoutReferencePreset(
         measurement_box=AlphaBox(540, 60, 1000, 1728),
         source_measurement_box=AlphaBox(180, 40, 520, 1279),
     ),
@@ -415,6 +431,7 @@ def load_source_config() -> dict[str, object]:
                 "mattePreset": "white",
                 "cropPreset": "none",
                 "layoutPreset": None,
+                "speedFactor": 1.0,
             },
             "sources": {},
         }
@@ -444,7 +461,7 @@ def source_dir(state: str) -> Path:
     return action_registry.source_dir(state)
 
 
-def source_info(state: str) -> dict[str, str | None]:
+def source_info(state: str) -> dict[str, str | float | None]:
     config = load_source_config()
     defaults = dict(config.get("defaults", {}))
     sources = config.get("sources", {})
@@ -457,6 +474,9 @@ def source_info(state: str) -> dict[str, str | None]:
     matte_preset = defaults.get("mattePreset") or "white"
     crop_preset = defaults.get("cropPreset") or "none"
     layout_preset = defaults.get("layoutPreset")
+    speed_factor = float(defaults.get("speedFactor") or 1.0)
+    if speed_factor <= 0:
+        raise ValueError(f"speedFactor must be positive for {state}: {speed_factor}")
     return {
         "provider": str(provider),
         "sourceFile": str(source_file) if source_file else None,
@@ -464,6 +484,7 @@ def source_info(state: str) -> dict[str, str | None]:
         "mattePreset": str(matte_preset),
         "cropPreset": str(crop_preset),
         "layoutPreset": str(layout_preset) if layout_preset else None,
+        "speedFactor": speed_factor,
     }
 
 
@@ -601,13 +622,15 @@ def check_sources(ffprobe: str | None, states: tuple[str, ...], skip_missing: bo
                 f"{path.relative_to(ROOT)} {width}x{height} duration={duration} "
                 f"provider={source_meta['provider']} mask={source_meta['maskPreset']} "
                 f"matte={source_meta['mattePreset']} crop={source_meta['cropPreset']} "
-                f"layout={source_meta['layoutPreset'] or 'auto'}"
+                f"layout={source_meta['layoutPreset'] or 'auto'} "
+                f"speed={source_meta['speedFactor']}"
             )
         else:
             print(
                 f"OK: {path.relative_to(ROOT)} provider={info['provider']} "
                 f"mask={info['maskPreset']} matte={info['mattePreset']} "
-                f"crop={info['cropPreset']} layout={info['layoutPreset'] or 'auto'}"
+                f"crop={info['cropPreset']} layout={info['layoutPreset'] or 'auto'} "
+                f"speed={info['speedFactor']}"
             )
 
     return 1 if failures else 0
@@ -683,6 +706,8 @@ def color_prep_filters(mask_preset: str, crop_preset: str, matte_preset: str) ->
         filters.append(f"drawbox=x=iw*0.66:y=ih*0.76:w=iw*0.34:h=ih*0.24:color={pad_color_for_matte(matte_preset)}:t=fill")
     elif mask_preset == "doubao_ai_dynamic":
         pass
+    elif mask_preset == "guofeng_mouse_cursor":
+        filters.append(f"drawbox=x=iw*0.60:y=ih*0.78:w=iw*0.40:h=ih*0.22:color={pad_color_for_matte(matte_preset)}:t=fill")
     elif mask_preset != "none":
         raise ValueError(f"unknown mask preset: {mask_preset}")
     filters.append("format=rgb24")
@@ -1081,6 +1106,7 @@ def convert_state(
     mask_preset: str,
     matte_preset: str,
     crop_preset: str,
+    speed_factor: float,
 ) -> Path:
     output = output_webm(state)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -1096,6 +1122,9 @@ def convert_state(
             crop_preset,
         )
         bbox = measure_alignment_bbox(ffmpeg, state, matte_video)
+        video_filter = layout_transform_filter(state, bbox, matte_preset)
+        if speed_factor != 1.0:
+            video_filter = f"{video_filter},setpts=PTS/{speed_factor},fps=24"
         run(
             [
                 ffmpeg,
@@ -1105,7 +1134,7 @@ def convert_state(
                 "-i",
                 str(matte_video),
                 "-vf",
-                layout_transform_filter(state, bbox, matte_preset),
+                video_filter,
                 "-an",
                 "-c:v",
                 "libvpx-vp9",
@@ -1363,7 +1392,17 @@ def main() -> int:
         mask_preset = resolve_mask_preset(state, args.mask_preset, args.mask_watermark)
         matte_preset = resolve_matte_preset(state, args.matte_preset)
         crop_preset = resolve_crop_preset(state, args.crop_preset)
-        webm = convert_state(ffmpeg, state, args.crf, args.background_similarity, mask_preset, matte_preset, crop_preset)
+        speed_factor = float(source_info(state)["speedFactor"] or 1.0)
+        webm = convert_state(
+            ffmpeg,
+            state,
+            args.crf,
+            args.background_similarity,
+            mask_preset,
+            matte_preset,
+            crop_preset,
+            speed_factor,
+        )
         write_contact_sheet(ffmpeg, state, webm)
         keyframe = write_fallback_keyframe(ffmpeg, state, webm)
         write_visual_metrics(state, keyframe)
@@ -1371,7 +1410,7 @@ def main() -> int:
         print(
             f"WROTE: {webm.relative_to(ROOT)} provider={provider} "
             f"mask={mask_preset} matte={matte_preset} crop={crop_preset} "
-            f"fallback={keyframe.relative_to(ROOT)}"
+            f"speed={speed_factor} fallback={keyframe.relative_to(ROOT)}"
         )
     return 0
 

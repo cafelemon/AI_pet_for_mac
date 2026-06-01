@@ -1,7 +1,7 @@
 # Roadmap
 
-更新时间：2026-05-29  
-当前冻结版本：`V1.0.0`
+更新时间：2026-05-31
+当前版本：`V1.1.8`
 
 ## 版本节奏
 
@@ -34,7 +34,7 @@
 
 ## V1.1.0：AI/Agent 接入层
 
-定位：第一个明确“接 AI”的版本。
+定位：第一个明确“接 AI”的版本。当前已进入实现态。
 
 目标：
 
@@ -44,31 +44,181 @@
 
 交付物：
 
-- 本地 discovery 文件或等效本地 endpoint。
-- `companion.status`、`companion.react`、`companion.say`、`companion.profile.list`。
+- 本地 discovery 文件：`~/.desktop-ai-companion/discovery/companion.json`。
+- 本地 Unix socket：`~/.desktop-ai-companion/ipc/companion.sock`。
+- `companion.status`、`companion.react`、`companion.say`、`companion.profile.list`、`companion.profile.select`。
 - reaction 到 action id 的映射表。
 - message validator 与 cooldown。
-- 协议 contract tests。
-- 控制中心新增 Integrations/AI 接入状态区域的最小版本。
+- `npm run agent:contract` 协议检查。
+- 控制中心新增 `AI 接入` 状态区域。
+- stdio MCP adapter：`node scripts/companion_mcp_server.mjs`。
+- Codex MCP 实机联调通过：`companion_status`、`companion_say`、`companion_react` 已验证。
 
-## V1.2.0：交互动作补齐
+验收状态：
 
-定位：让桌宠从“状态展示”进一步变成“会回应用户”。
+- 已通过最小闭环：Codex MCP -> stdio adapter -> local socket -> Electron main -> renderer reaction/message。
+- 已验证 `success` 消息气泡、`thinking` reaction 和 cooldown 策略。
+- 后续 `V1.1.x` 可继续补充敏感消息拒绝、profile 切换和更多 MCP 客户端兼容性回归。
 
-目标：
+## V1.1.2：鼠标靠近害羞循环
 
-- 补齐 P1-A hover/click/drag source videos。
-- 完成 source -> keyframe -> WebM -> registry -> runtime 的闭环。
-- 启用 `interaction_rules.config.json`。
+定位：小版本补丁，只处理 `guofeng_ai` 鼠标靠近/移开反馈，不进入完整 V1.2 click/drag。
 
 交付物：
 
-- `mouse_hover_look`
-- `mouse_leave_back`
+- `mouse_hover_look`：正常到害羞。
+- `mouse_shy_loop`：鼠标停留害羞循环。
+- `mouse_leave_back`：害羞到正常。
+
+验收状态：
+
+- 三条 source video 已接入并转为透明 WebM。
+- 三条动作均以冻结 `idle` 人物大小对齐。
+- 多底色 QA 已生成，用于检查头脚完整、发丝袖口和水印/光标区域。
+- package 版本升到 `1.1.2`。
+
+## V1.1.3：鼠标害羞节奏加速
+
+定位：小版本补丁，只调整 `V1.1.2` 鼠标害羞交互节奏，不改变素材来源和交互语义。
+
+交付物：
+
+- `mouse_hover_look` 输出阶段使用 `1.75x`。
+- `mouse_shy_loop` 输出阶段使用 `1.5x`。
+- `mouse_leave_back` 输出阶段使用 `1.75x`。
+
+验收状态：
+
+- 三条动作重新生成透明 WebM、keyframe 和多底色 QA。
+- runtime 时长更新为加速后的 `2875ms / 3375ms / 2875ms`。
+- package 版本升到 `1.1.3`。
+
+## V1.1.4：MCP 能力蓝图
+
+定位：规划态补丁，不改变当前运行版本号，不新增 runtime 方法。
+
+目标：
+
+- 明确当前 MCP L1 能力已完成：`status / react / say / profile.list / profile.select`。
+- 规划 L2 agent 状态面板、L3 用户确认流、L4 事件与上下文摘要、L5 companion kernel。
+- 记录未来新增 MCP 方法的安全边界、验收口径和实施门槛。
+
+交付物：
+
+- `docs/09_mcp_capability_blueprint.md`
+- roadmap、progress、decisions 和 agent guide 中记录 `V1.1.4` 蓝图边界。
+
+不做：
+
+- 不生成新视频。
+- 不把 click/drag placeholder 标记为 runtime ready。
+- 不新增远程 HTTP 服务或新 MCP SDK 依赖。
+- 不改变现有 Codex MCP 已验证链路。
+
+## V1.1.5：MCP Agent 状态面板
+
+定位：MCP L2 能力实施版本，向后兼容扩展现有 protocol methods。
+
+交付物：
+
+- 新增 `companion.agent.set_state`、`companion.agent.get_state`、`companion.agent.clear_state`。
+- 新增 MCP tools：`companion_agent_set_state`、`companion_agent_get_state`、`companion_agent_clear_state`。
+- 支持 `working / testing / waiting_auth / blocked / done / idle` 语义状态。
+- 控制中心 AI 接入面板显示 semantic status、runtime state 和 expiresAt。
+
+验收状态：
+
+- `protocolVersion` 保持 `1`，通过 discovery methods 暴露新增能力。
+- `message` 复用现有安全 validator。
+- `clear_state` 不受 cooldown 限制，避免 agent 状态卡住。
+- package 版本升到 `1.1.5`。
+
+## V1.1.6：MCP 用户确认流
+
+定位：MCP L3 最小闭环，让 agent 的授权/确认请求进入本地用户确认流程。
+
+交付物：
+
+- 新增 `companion.confirm.request`、`companion.confirm.get`、`companion.confirm.cancel`。
+- 新增 MCP tools：`companion_confirm_request`、`companion_confirm_get`、`companion_confirm_cancel`。
+- 控制中心 `AI 接入` 面板显示确认卡片和 `允许 / 拒绝 / 取消` 操作。
+- pending confirmation 自动打开控制中心并让桌宠进入 `waiting_auth`。
+- 当前控制中心确认卡片是临时 UI；后续补齐专门确认动作和气泡后，确认交互应迁移到桌宠气泡层。
+
+验收状态：
+
+- 第一版只支持单个 pending confirmation。
+- 用户响应只通过 renderer IPC 完成，MCP 不暴露伪造同意的 respond 方法。
+- package 版本升到 `1.1.6`。
+
+## V1.1.7：视频供给台账 + MCP 上下文摘要
+
+定位：MCP L4 最小只读能力实施版本，同时把视频素材供给从代码主线中解耦。
+
+交付物：
+
+- 新增 `docs/10_video_supply_progress.md` 人工视频供给台账。
+- 新增 `companion.context.summary` 和 `companion.activity.list`。
+- 新增 MCP tools：`companion_context_summary`、`companion_activity_list`。
+- 活动记录使用 Electron main 内存 ring buffer，不落盘、不跨重启保留。
+
+验收状态：
+
+- `context.summary` 不暴露 token、socket path、discovery path、绝对路径或长日志。
+- `activity.list` 默认返回最近 20 条，最大 50 条。
+- `protocolVersion` 保持 `1`，通过 discovery methods 暴露新增能力。
+- package 版本升到 `1.1.7`。
+
+## V1.1.8：Profile Capability Manifest
+
+定位：MCP L5 最小 profile 能力声明版本，让外部 agent 可以读取 profile 的能力边界、缺视频动作和分发预留口径。
+
+交付物：
+
+- `data/profiles/<profile>/profile_manifest.config.json`
+- `pet_profiles.config.json` 挂载 `profileManifestPath`
+- 新增 `companion.profile.capabilities`
+- 新增 MCP tool：`companion_profile_capabilities`
+- `context.summary` 增加 `profileCapabilitiesSummary`
+
+验收状态：
+
+- `guofeng_ai` 标记鼠标害羞链路和 `drag_hold_lift` 已 ready。
+- `guofeng_ai` 标记 `click_head_happy / click_body_confused / drag_start_lift / drag_end_dizzy` 缺 source 且 video blocked。
+- `legacy_real` 使用保守声明，不继承古风 profile 交互。
+- L4 `companion.events.subscribe` 尚未实现，保留为后续 TODO。
+- package 版本升到 `1.1.8`。
+
+## V1.2.0：交互动作补齐
+
+定位：让桌宠从“状态展示”进一步变成“会回应用户”。鼠标靠近害羞已在 `V1.1.2` 先行落地并在 `V1.1.3` 调整节奏，完整 V1.2 后续继续补点击和抓起素材。
+
+目标：
+
+- 补齐 P1-A click/drag source videos。
+- 完成 source -> keyframe -> WebM -> registry -> runtime 的闭环。
+- 启用 `interaction_rules.config.json`。
+- 只覆盖 `guofeng_ai`，不扩大到 `legacy_real`。
+
+交付物：
+
 - `click_head_happy`
 - `click_body_confused`
 - `drag_start_lift`
+- `drag_hold_lift`
 - `drag_end_dizzy`
+
+当前已完成：
+
+- 新增 `guofeng_ai` profile-scoped interaction rules。
+- Renderer 接入 profile-scoped interaction 调度底座；hover/leave 已在 `V1.1.2` 形成完整链路并在 `V1.1.3` 加速。
+- `drag_hold_lift` 复用现有 Guofeng V1 runtime asset。
+- 新增 P1-A 高质量 AI 视频生成提示词与源视频落盘清单。
+
+未完成：
+
+- click/drag P1-A source videos 尚未完整生成：缺少当前可调用的视频生成工具或外部源视频。
+- 待 source videos 到位后再转透明 WebM、生成 keyframe/QA，并将对应动作标记为 runtime ready。
 
 ## V1.3.0：Profile Package
 

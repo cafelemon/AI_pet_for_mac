@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "profileId": "legacy_real",
+  "label": "真人桌宠",
+  "stage": "stable",
+  "summary": "V1.0 冻结的真人桌宠 profile，保留现有运行时状态能力；不声明古风 profile 的鼠标害羞、click 或 drag 新交互。",
+  "capabilities": {
+    "mcpLayers": [
+      "L1_basic_remote_control",
+      "L2_agent_state_panel",
+      "L3_confirmation_flow",
+      "L4_readonly_context",
+      "L5_profile_capability_manifest"
+    ],
+    "states": {
+      "ready": [
+        "idle"
+      ],
+      "notReady": []
+    },
+    "interactions": {
+      "ready": [],
+      "missingSource": [],
+      "blockedByVideo": []
+    },
+    "confirmation": {
+      "currentEntry": "control_center_temp",
+      "futureEntry": "companion_bubble_pending_assets"
+    }
+  },
+  "assets": {
+    "runtimeReadyActions": [
+      "idle"
+    ],
+    "missingSourceActions": [],
+    "blockedByVideoActions": [],
+    "videoLedgerPath": "docs/10_video_supply_progress.md",
+    "actionProgressPath": "docs/generated/profiles/legacy_real/action_progress.md"
+  },
+  "distribution": {
+    "publishable": false,
+    "license": "TBD",
+    "provenance": "legacy local asset set; publish provenance not finalized",
+    "notes": "This profile stays conservative for future App Store/open-source review and does not inherit in-progress guofeng_ai interaction claims."
+  }
+}

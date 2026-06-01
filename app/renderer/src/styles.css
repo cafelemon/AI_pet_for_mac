@@ -42,7 +42,8 @@ body {
   height: 100%;
   display: grid;
   place-items: center;
-  pointer-events: none;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 
 .companion-hit-layer {
@@ -837,6 +838,59 @@ body {
   background: rgba(255, 255, 255, 0.82);
 }
 
+.integration-card {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(52, 45, 42, 0.12);
+  border-left: 4px solid #8f8279;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.integration-card--active {
+  border-left-color: #2f8c4c;
+}
+
+.integration-card--attention {
+  border-left-color: #b8323c;
+}
+
+.integration-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.integration-facts span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(52, 45, 42, 0.08);
+  color: #5f554e;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.confirmation-card__title {
+  margin: 0;
+  color: #28211e;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.confirmation-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 34px);
+  gap: 6px;
+}
+
+.confirmation-actions .mini-button {
+  width: 34px;
+}
+
 .profile-list {
   display: grid;
   gap: 8px;
@@ -901,6 +955,7 @@ body {
   font-size: 11px;
   font-weight: 700;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .settings-module__error {

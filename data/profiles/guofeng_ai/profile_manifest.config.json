@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "profileId": "guofeng_ai",
+  "label": "古风 AI 角色",
+  "stage": "in_progress",
+  "summary": "古风 AI 角色 profile，已具备基础状态、MCP 状态表达、确认流临时入口和鼠标靠近害羞交互；click/drag 四条 V1.2 动作等待视频源。",
+  "capabilities": {
+    "mcpLayers": [
+      "L1_basic_remote_control",
+      "L2_agent_state_panel",
+      "L3_confirmation_flow",
+      "L4_readonly_context",
+      "L5_profile_capability_manifest"
+    ],
+    "states": {
+      "ready": [
+        "idle",
+        "idle_cross_arm",
+        "coding",
+        "thinking",
+        "bath_idle",
+        "sword_flight_idle",
+        "sleep",
+        "duck_sit_idle"
+      ],
+      "notReady": [
+        "reading",
+        "success",
+        "error",
+        "reminder"
+      ]
+    },
+    "interactions": {
+      "ready": [
+        "mouse_hover_look",
+        "mouse_shy_loop",
+        "mouse_leave_back",
+        "drag_hold_lift"
+      ],
+      "missingSource": [
+        "click_head_happy",
+        "click_body_confused",
+        "drag_start_lift",
+        "drag_end_dizzy"
+      ],
+      "blockedByVideo": [
+        "click_head_happy",
+        "click_body_confused",
+        "drag_start_lift",
+        "drag_end_dizzy"
+      ]
+    },
+    "confirmation": {
+      "currentEntry": "control_center_temp",
+      "futureEntry": "companion_bubble_pending_assets"
+    }
+  },
+  "assets": {
+    "runtimeReadyActions": [
+      "idle",
+      "idle_cross_arm",
+      "coding",
+      "thinking",
+      "bath_idle",
+      "sword_flight_idle",
+      "sleep",
+      "duck_sit_idle",
+      "mouse_hover_look",
+      "mouse_shy_loop",
+      "mouse_leave_back",
+      "drag_hold_lift"
+    ],
+    "missingSourceActions": [
+      "click_head_happy",
+      "click_body_confused",
+      "drag_start_lift",
+      "drag_end_dizzy"
+    ],
+    "blockedByVideoActions": [
+      "click_head_happy",
+      "click_body_confused",
+      "drag_start_lift",
+      "drag_end_dizzy"
+    ],
+    "videoLedgerPath": "docs/10_video_supply_progress.md",
+    "actionProgressPath": "docs/generated/profiles/guofeng_ai/action_progress.md"
+  },
+  "distribution": {
+    "publishable": false,
+    "license": "TBD",
+    "provenance": "mixed generated/local source videos; publish provenance not finalized",
+    "notes": "App Store and open-source packaging are reserved for later review. Current manifest is for local agent capability discovery only."
+  }
+}

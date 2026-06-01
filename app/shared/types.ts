@@ -1,3 +1,5 @@
+import type { AgentSemanticStatus } from './agentProtocol';
+
 export interface CompanionConfig {
   window: {
     alwaysOnTop: boolean;
@@ -50,6 +52,8 @@ export interface PetProfileDefinition {
   companionConfigPath: string;
   statesConfigPath: string;
   actionRegistryPath: string;
+  interactionRulesPath?: string;
+  profileManifestPath?: string;
   motionCatalogPath: string;
   motionSourcesPath: string;
   actionProgressPath: string;
@@ -74,6 +78,43 @@ export interface PetProfileState {
   activeProfileId: string;
   defaultProfileId: string;
   profiles: PetProfileSummary[];
+}
+
+export interface ProfileCapabilityManifest {
+  version: number;
+  profileId: string;
+  label: string;
+  stage: 'stable' | 'in_progress' | 'experimental' | 'deprecated';
+  summary: string;
+  capabilities: {
+    mcpLayers: string[];
+    states: {
+      ready: string[];
+      notReady: string[];
+    };
+    interactions: {
+      ready: string[];
+      missingSource: string[];
+      blockedByVideo: string[];
+    };
+    confirmation: {
+      currentEntry: string;
+      futureEntry: string;
+    };
+  };
+  assets: {
+    runtimeReadyActions: string[];
+    missingSourceActions: string[];
+    blockedByVideoActions: string[];
+    videoLedgerPath: string;
+    actionProgressPath: string;
+  };
+  distribution: {
+    publishable: boolean;
+    license: string;
+    provenance: string;
+    notes: string;
+  };
 }
 
 export type ActionType = 'state' | 'state_variant' | 'transition' | 'event' | 'interaction' | 'fallback';
@@ -115,6 +156,7 @@ export interface IdleMotionConfig {
 export interface PluginsConfig {
   plugins: {
     codex_plugin?: CodexPluginConfig;
+    companion_protocol?: Partial<CompanionProtocolConfig>;
     weather_plugin?: {
       enabled: boolean;
     };
@@ -135,14 +177,29 @@ export interface CodexPluginConfig {
   errorHoldMs: number;
 }
 
+export interface CompanionProtocolConfig {
+  enabled: boolean;
+  discoveryPath: string;
+  socketPath: string;
+  messageMaxChars: number;
+  cooldownMs: number;
+  defaultTtlMs: number;
+  maxTtlMs: number;
+}
+
 export interface CompanionAPI {
   getCompanionConfig: () => Promise<CompanionConfig>;
   getStatesConfig: () => Promise<StatesConfig>;
   getActionRegistryConfig: () => Promise<ActionRegistryConfig>;
+  getInteractionRulesConfig: () => Promise<InteractionRulesConfig>;
   getPetProfiles: () => Promise<PetProfileState>;
   setPetProfile: (profileId: string) => Promise<PetProfileState>;
   assetUrl: (relativePath: string) => string;
   getCodexRuntimeState: () => Promise<CodexRenderState | null>;
+  getAgentRuntimeState: () => Promise<AgentRenderState | null>;
+  getAgentConfirmation: () => Promise<AgentConfirmation | null>;
+  respondAgentConfirmation: (requestId: string, action: AgentConfirmationAction) => Promise<AgentConfirmation | null>;
+  getCompanionProtocolStatus: () => Promise<CompanionProtocolStatus>;
   getReminderRuntimeState: () => Promise<ReminderNotification | null>;
   listReminders: () => Promise<ReminderRecord[]>;
   createReminder: (input: CreateReminderInput) => Promise<ReminderRecord>;
@@ -181,10 +238,51 @@ export interface CompanionAPI {
   onInputPermissionStatus: (callback: (status: InputPermissionStatus) => void) => () => void;
   onInteractionDragActive: (callback: (active: boolean) => void) => () => void;
   onCodexRuntimeState: (callback: (state: CodexRenderState | null) => void) => () => void;
+  onAgentRuntimeState: (callback: (state: AgentRenderState | null) => void) => () => void;
+  onAgentConfirmation: (callback: (confirmation: AgentConfirmation | null) => void) => () => void;
+  onCompanionProtocolStatus: (callback: (status: CompanionProtocolStatus) => void) => () => void;
   onReminderRuntimeState: (callback: (state: ReminderNotification | null) => void) => () => void;
   onRemindersUpdated: (callback: (reminders: ReminderRecord[]) => void) => () => void;
   onTaskNotification: (callback: (state: TaskNotification | null) => void) => () => void;
   onTasksUpdated: (callback: (tasks: TaskCenterSnapshot) => void) => () => void;
+}
+
+export type InteractionEventName =
+  | 'mouse_hover'
+  | 'mouse_leave'
+  | 'click_head'
+  | 'click_body'
+  | 'drag_start'
+  | 'drag_hold'
+  | 'drag_end';
+
+export type InteractionInterruptLevel = 'low' | 'medium' | 'high';
+
+export interface InteractionRule {
+  action: string;
+  holdAction?: string;
+  cooldownMs: number;
+  interruptLevel: InteractionInterruptLevel;
+  returnToPrevious?: boolean;
+  returnTo?: string;
+}
+
+export interface InteractionRulesConfig {
+  version: number;
+  enabled: boolean;
+  rules: Partial<Record<InteractionEventName, InteractionRule>>;
+  guards?: {
+    sleep?: {
+      allow?: InteractionEventName[];
+      block?: InteractionEventName[];
+    };
+    transition?: {
+      blockInterruptLevels?: InteractionInterruptLevel[];
+    };
+    event?: {
+      blockInterruptLevels?: InteractionInterruptLevel[];
+    };
+  };
 }
 
 export type CompanionCommand =
@@ -241,6 +339,45 @@ export interface CodexRenderState {
   exitCode: number | null;
   timestamp: string | null;
   isStale: boolean;
+}
+
+export interface AgentRenderState {
+  source: 'agent';
+  state: CompanionState;
+  status: AgentSemanticStatus | null;
+  message: string | null;
+  reaction: string | null;
+  timestamp: string;
+  expiresAt: string;
+  isStale: boolean;
+}
+
+export type AgentConfirmationStatus = 'pending' | 'allowed' | 'denied' | 'cancelled' | 'expired';
+export type AgentConfirmationAction = 'allow' | 'deny' | 'cancel';
+
+export interface AgentConfirmation {
+  requestId: string;
+  status: AgentConfirmationStatus;
+  title: string;
+  message: string;
+  createdAt: string;
+  expiresAt: string;
+  respondedAt: string | null;
+  resolvedBy: 'user' | 'agent' | 'timeout' | null;
+}
+
+export interface CompanionProtocolStatus {
+  enabled: boolean;
+  running: boolean;
+  protocolVersion: number;
+  transport: 'unix-socket';
+  socketPath: string | null;
+  discoveryPath: string | null;
+  appVersion: string;
+  methods: string[];
+  agentState: AgentRenderState | null;
+  confirmation: AgentConfirmation | null;
+  lastError: string | null;
 }
 
 export type ReminderRepeatRule = 'none' | 'daily' | 'weekly' | 'monthly';
@@ -339,7 +476,7 @@ export interface WindowControls {
 
 export type MouseMode = 'smart' | 'interactive';
 
-export type ControlCenterModule = 'status' | 'tasks' | 'reminders' | 'settings';
+export type ControlCenterModule = 'status' | 'integrations' | 'tasks' | 'reminders' | 'settings';
 
 export type InputPermissionStatus = 'granted' | 'denied' | 'unknown';
 

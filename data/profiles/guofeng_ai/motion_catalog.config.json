@@ -256,19 +256,28 @@
       "id": "mouse_hover_look",
       "label": "mouse hover look",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.1.3",
       "playback": "one_shot",
-      "description": "鼠标靠近：角色抬头看向鼠标方向，轻微注意到用户",
-      "runtime": false
+      "description": "鼠标靠近：角色从正常站姿快速进入害羞状态",
+      "runtime": true
+    },
+    {
+      "id": "mouse_shy_loop",
+      "label": "mouse shy loop",
+      "category": "用户交互",
+      "stage": "V1.1.3",
+      "playback": "loop",
+      "description": "鼠标停留：角色维持加速后的害羞循环状态",
+      "runtime": true
     },
     {
       "id": "mouse_leave_back",
       "label": "mouse leave back",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.1.3",
       "playback": "one_shot",
-      "description": "鼠标离开：角色视线回到原状态，动作自然收回",
-      "runtime": false
+      "description": "鼠标移开：角色从害羞状态快速恢复到正常站姿",
+      "runtime": true
     },
     {
       "id": "click_head_happy",

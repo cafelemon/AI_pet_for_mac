@@ -7,6 +7,7 @@
 ```mermaid
 flowchart LR
   Codex["Codex runtime state"] --> Main["Electron main"]
+  Agent["AI/Agent protocol"] --> Main
   Tasks["Tasks / reminders"] --> Main
   Config["data/config/*.json"] --> Main
   Main --> Renderer["React renderer"]
@@ -17,7 +18,7 @@ flowchart LR
 
 核心链路：
 
-- Electron main 负责本地窗口、IPC、任务、提醒、runtime state。
+- Electron main 负责本地窗口、IPC、任务、提醒、Codex runtime state 和 AI/Agent protocol。
 - React renderer 负责 companion UI、控制中心、状态面板和动作播放。
 - `data/config/action_registry.config.json` 是默认 profile 的动作入口。
 - `data/config/pet_profiles.config.json` 决定 profile 切换和每套配置位置。
@@ -59,13 +60,13 @@ flowchart LR
 - 为兼容外部宠物包牺牲当前 WebM + keyframe + QA 管线。
 - 让 agent 直接写内部 runtime/config 文件。
 
-## V1.1.0 目标架构
+## V1.1.0 架构
 
 ```mermaid
 flowchart LR
-  Agent["Codex / MCP agent / future clients"] --> Client["Companion client"]
-  Client --> Discovery["Local discovery + token"]
-  Discovery --> Protocol["Companion IPC protocol"]
+  Agent["MCP agent / future clients"] --> MCP["stdio MCP adapter"]
+  MCP --> Discovery["Local discovery + token"]
+  Discovery --> Protocol["Unix socket NDJSON protocol"]
   Protocol --> Validator["Message validator + cooldown"]
   Validator --> Main["Electron main"]
   Main --> Renderer["React renderer"]
@@ -81,13 +82,69 @@ flowchart LR
 - `say` 必须经过安全消息校验。
 - `react` 只能触发允许的 action/reaction。
 - `status` 可以暴露 readiness，但不泄露本地敏感路径。
+- 控制中心只显示协议状态，不显示启动 token。
+
+## V1.1.4 MCP 能力蓝图
+
+`V1.1.4` 不改变架构实现，只补充后续能力分层：
+
+- L1：当前已实现的 `status / react / say / profile.list / profile.select`。
+- L2：agent 状态面板，将外部 agent 的工作、等待、阻塞、测试和完成状态映射到桌宠。
+- L3：用户确认流，把授权、选择和确认请求变成可解释的本地交互。
+- L4：事件订阅与上下文摘要，让 agent 少轮询、少直出日志。
+- L5：companion kernel，包括 profile 能力、插件能力、权限和用户偏好。
+
+详细边界见 `docs/09_mcp_capability_blueprint.md`。
+
+## V1.1.5 Agent 状态面板
+
+`V1.1.5` 在现有 protocol 层向后兼容增加 L2 agent state methods：
+
+- `companion.agent.set_state`
+- `companion.agent.get_state`
+- `companion.agent.clear_state`
+
+这些方法仍走本地 discovery、token、Unix socket 和 stdio MCP adapter，不新增远程服务。Renderer 继续复用 `AgentRenderState` 优先级层，控制中心通过 protocol status 观察当前 semantic status、runtime state 和 expiresAt。
+
+## V1.1.6 用户确认流
+
+`V1.1.6` 在 protocol 层新增 L3 confirmation methods：
+
+- `companion.confirm.request`
+- `companion.confirm.get`
+- `companion.confirm.cancel`
+
+确认请求仍使用本地 Unix socket + token + stdio MCP adapter。Electron main 只维护一个 pending confirmation，并通过 renderer IPC 接收用户的 `allow / deny / cancel` 响应；MCP 不提供用户响应入口，避免外部 agent 伪造授权。pending 时桌宠进入 `waiting_auth`，控制中心自动打开 `AI 接入` 面板展示确认卡片。
+
+控制中心确认卡片是当前缺少专门确认动作和气泡交互时的临时 UI 承接层。后续动作素材和气泡确认组件补齐后，确认流的主入口应迁移到桌宠气泡，控制中心保留为状态观察和兜底入口。
+
+## V1.1.7 上下文摘要与活动记录
+
+`V1.1.7` 在 protocol 层新增 L4 最小只读 methods：
+
+- `companion.context.summary`
+- `companion.activity.list`
+
+`context.summary` 返回安全摘要，只包含 app/profile readiness、agent state、confirmation summary、Codex state 摘要、methods 和视频阻塞摘要，不暴露 token、socket path、discovery path、绝对路径或长日志。`activity.list` 从 Electron main 的内存 ring buffer 读取最近活动，默认 20 条、最大 50 条，不落盘、不跨重启保留。
+
+`companion.events.subscribe` 尚未实现；当前 L4 只有只读 summary/list，不提供 streaming event transport。
+
+## V1.1.8 Profile 能力声明
+
+`V1.1.8` 在 profile 配置层新增 `profileManifestPath`，并通过 local protocol 暴露：
+
+- `companion.profile.capabilities`
+
+manifest 由 `data/profiles/<profile>/profile_manifest.config.json` 维护，记录 profile stage、MCP 层级、ready interactions、missing source actions、video blocked actions、确认入口和分发/开源预留字段。`context.summary` 只返回精简 `profileCapabilitiesSummary`，完整能力需要单独调用 profile capabilities。返回内容只包含 action id 和相对文档引用，不暴露 token、socket path、discovery path、绝对路径或本地 cwd。
 
 ## 数据与配置权威源
 
 - 动作是否存在：`action_registry.config.json`
 - 动作进度和 source path：`motion_catalog.config.json` + `motion_sources.config.json`
+- 人工视频供给台账：`docs/10_video_supply_progress.md`
 - 运行时状态与时长：`states.config.json`
 - profile 列表与路径：`pet_profiles.config.json`
+- profile 能力声明：`profile_manifest.config.json`
 - 用户交互规则：`interaction_rules.config.json`
 - plugin 开关：`plugins.config.json`
 

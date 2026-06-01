@@ -2,11 +2,96 @@
 const electron = require("electron");
 const node_fs = require("node:fs");
 const promises = require("node:fs/promises");
+const node_net = require("node:net");
+const node_crypto = require("node:crypto");
 const node_os = require("node:os");
 const node_path = require("node:path");
 const node_url = require("node:url");
 const node_child_process = require("node:child_process");
 const node_sqlite = require("node:sqlite");
+const COMPANION_PROTOCOL_VERSION = 1;
+const COMPANION_PROTOCOL_METHODS = [
+  "companion.status",
+  "companion.react",
+  "companion.say",
+  "companion.agent.set_state",
+  "companion.agent.get_state",
+  "companion.agent.clear_state",
+  "companion.confirm.request",
+  "companion.confirm.get",
+  "companion.confirm.cancel",
+  "companion.context.summary",
+  "companion.activity.list",
+  "companion.profile.list",
+  "companion.profile.capabilities",
+  "companion.profile.select"
+];
+const AGENT_REACTION_TO_STATE = {
+  idle: "idle",
+  reset: "idle",
+  thinking: "thinking",
+  editing: "coding",
+  coding: "coding",
+  waiting: "reminder",
+  success: "success",
+  error: "error"
+};
+const AGENT_STATUS_TO_STATE = {
+  idle: "idle",
+  working: "coding",
+  testing: "thinking",
+  waiting_auth: "waiting_auth",
+  blocked: "error",
+  done: "success"
+};
+const SECRET_PATTERN = /(?:api[_-]?key|secret|token|password|passwd|bearer|sk-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{10,})/i;
+const URL_PATTERN = /\b(?:https?:\/\/|www\.)\S+/i;
+const ABSOLUTE_PATH_PATTERN = /(?:^|\s)(?:~\/|\/(?:Users|private|var|tmp|etc|opt|home|Volumes)\b|[A-Za-z]:\\)/;
+const STACK_PATTERN = /\b(?:at\s+\S+\s+\(|Traceback \(most recent call last\)|File ".+", line \d+)/;
+const CODE_PATTERN = /```|;\s*(?:rm|git|npm|python|node|curl)\b|(?:function|const|let|var|class)\s+\w+/;
+function mapAgentReaction(reaction) {
+  const normalizedReaction = reaction.trim().toLowerCase();
+  return AGENT_REACTION_TO_STATE[normalizedReaction] ?? null;
+}
+function mapAgentStatus(status) {
+  const normalizedStatus = status.trim().toLowerCase();
+  return AGENT_STATUS_TO_STATE[normalizedStatus] ?? null;
+}
+function normalizeAgentStatus(status) {
+  const normalizedStatus = status.trim().toLowerCase();
+  return AGENT_STATUS_TO_STATE[normalizedStatus] ? normalizedStatus : null;
+}
+function validateAgentMessage(value, options) {
+  if (typeof value !== "string") {
+    return { ok: false, error: "message must be a string" };
+  }
+  const message = value.trim().replace(/\s+/g, " ");
+  if (!message) {
+    return { ok: false, error: "message is empty" };
+  }
+  if (message.length > options.maxChars) {
+    return { ok: false, error: `message exceeds ${options.maxChars} characters` };
+  }
+  if (value.split(/\r?\n/).length > 2) {
+    return { ok: false, error: "message looks like multi-line output" };
+  }
+  if (URL_PATTERN.test(message)) {
+    return { ok: false, error: "message contains a URL" };
+  }
+  if (ABSOLUTE_PATH_PATTERN.test(message)) {
+    return { ok: false, error: "message contains a local path" };
+  }
+  if (SECRET_PATTERN.test(message)) {
+    return { ok: false, error: "message may contain a secret" };
+  }
+  if (STACK_PATTERN.test(message)) {
+    return { ok: false, error: "message looks like a stack trace" };
+  }
+  if (CODE_PATTERN.test(message)) {
+    return { ok: false, error: "message looks like code or a shell command" };
+  }
+  return { ok: true, message };
+}
 class MacInputService {
   constructor(helperPath, onEvent, onStatus) {
     this.helperPath = helperPath;
@@ -146,7 +231,7 @@ function resolveDataPath$1(projectRoot2, path) {
   const expandedPath = expandHomePath$2(path);
   return node_path.isAbsolute(expandedPath) ? expandedPath : node_path.resolve(projectRoot2, expandedPath);
 }
-function nowIso$1() {
+function nowIso$2() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function normalizeTitle$1(title) {
@@ -278,7 +363,7 @@ class ReminderService {
   }
   createReminder(input) {
     const db = this.requireDb();
-    const createdAt = nowIso$1();
+    const createdAt = nowIso$2();
     const title = normalizeTitle$1(input.title);
     const dueAt = normalizeDueAt(input.dueAt);
     const repeatRule = normalizeRepeatRule(input.repeatRule);
@@ -313,7 +398,7 @@ class ReminderService {
   }
   dismissReminder(id) {
     const db = this.requireDb();
-    const updatedAt = nowIso$1();
+    const updatedAt = nowIso$2();
     db.prepare(`UPDATE reminders SET status = 'dismissed', updated_at = ? WHERE id = ?`).run(updatedAt, id);
     return this.getReminder(id);
   }
@@ -331,7 +416,7 @@ class ReminderService {
     const db = this.requireDb();
     const safeMinutes = Math.max(1, Math.min(1440, Math.round(minutes)));
     const dueAt = new Date(Date.now() + safeMinutes * 6e4).toISOString();
-    const updatedAt = nowIso$1();
+    const updatedAt = nowIso$2();
     db.prepare(
       `
         UPDATE reminders
@@ -359,7 +444,7 @@ class ReminderService {
       return null;
     }
     const reminder = mapReminderRow(row);
-    const triggeredAt = nowIso$1();
+    const triggeredAt = nowIso$2();
     if (reminder.repeatRule === "none") {
       this.db.prepare(`UPDATE reminders SET status = 'triggered', triggered_at = ?, updated_at = ? WHERE id = ?`).run(triggeredAt, triggeredAt, reminder.id);
       reminder.status = "triggered";
@@ -623,7 +708,7 @@ function resolveDataPath(projectRoot2, path) {
   const expandedPath = expandHomePath$1(path);
   return node_path.isAbsolute(expandedPath) ? expandedPath : node_path.resolve(projectRoot2, expandedPath);
 }
-function nowIso() {
+function nowIso$1() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function localTaskDate(date = /* @__PURE__ */ new Date()) {
@@ -768,7 +853,7 @@ class TaskService {
   }
   createTask(input) {
     const db = this.requireDb();
-    const createdAt = nowIso();
+    const createdAt = nowIso$1();
     const title = normalizeTitle(input.title);
     const taskDate = normalizeTaskDate(input.taskDate);
     const result = db.prepare(
@@ -797,7 +882,7 @@ class TaskService {
       return null;
     }
     const db = this.requireDb();
-    const updatedAt = nowIso();
+    const updatedAt = nowIso$1();
     const completedAt = status === "done" || status === "failed" ? updatedAt : null;
     db.prepare(
       `
@@ -849,7 +934,7 @@ class TaskService {
     if (!row) {
       return null;
     }
-    const notifiedAt = nowIso();
+    const notifiedAt = nowIso$1();
     this.db.prepare(`UPDATE tasks SET status = 'blocked', stuck_notified_at = ?, updated_at = ? WHERE id = ?`).run(notifiedAt, notifiedAt, row.id);
     const task = this.getTask(row.id) ?? mapTaskRow({ ...row, status: "blocked", stuck_notified_at: notifiedAt });
     return {
@@ -867,7 +952,7 @@ class TaskService {
   upsertActiveCodexTask(state) {
     const db = this.requireDb();
     const active = this.getCurrentCodexTask();
-    const updatedAt = nowIso();
+    const updatedAt = nowIso$1();
     const activityAt = state.timestamp ?? updatedAt;
     const title = state.task ? codexTaskTitle(state) : active?.title ?? codexTaskTitle(state);
     if (!active) {
@@ -894,7 +979,7 @@ class TaskService {
   finishCurrentCodexTask(status, state) {
     const db = this.requireDb();
     const active = this.getCurrentCodexTask();
-    const updatedAt = nowIso();
+    const updatedAt = nowIso$1();
     const completedAt = state.timestamp ?? updatedAt;
     const title = state.task ? codexTaskTitle(state) : active?.title ?? codexTaskTitle(state);
     if (!active) {
@@ -959,6 +1044,9 @@ const WINDOW_HEIGHT = 576;
 const ASSET_SCHEME = "companion-asset";
 const COMPANION_COMMAND_CHANNEL = "companion:command";
 const CODEX_RUNTIME_STATE_CHANNEL = "codex:runtime-state";
+const AGENT_RUNTIME_STATE_CHANNEL = "agent:runtime-state";
+const AGENT_CONFIRMATION_CHANNEL = "agent:confirmation";
+const COMPANION_PROTOCOL_STATUS_CHANNEL = "companion-protocol:status";
 const REMINDER_RUNTIME_STATE_CHANNEL = "reminder:runtime-state";
 const REMINDERS_UPDATED_CHANNEL = "reminder:updated";
 const TASK_NOTIFICATION_CHANNEL = "task:notification";
@@ -973,6 +1061,17 @@ const INTERACTION_DRAG_ACTIVE_CHANNEL = "interaction:drag-active";
 const MAX_MOUSE_HIT_REGIONS = 2400;
 const CONTROL_CENTER_WIDTH = 420;
 const CONTROL_CENTER_HEIGHT = 560;
+const CONFIRMATION_DEFAULT_TTL_MS = 6e4;
+const CONFIRMATION_MAX_TTL_MS = 3e5;
+const CONFIRMATION_FEEDBACK_TTL_MS = 3e3;
+const ACTIVITY_BUFFER_LIMIT = 50;
+const ACTIVITY_DEFAULT_LIMIT = 20;
+const V12_BLOCKED_INTERACTION_ACTIONS = [
+  "click_head_happy",
+  "click_body_confused",
+  "drag_start_lift",
+  "drag_end_dizzy"
+];
 const DEFAULT_WINDOW_CONTROLS = {
   scale: 1,
   mouseMode: "smart",
@@ -985,6 +1084,15 @@ const DEFAULT_CODEX_PLUGIN_CONFIG = {
   thinkingTimeoutMs: 3e4,
   successHoldMs: 4e3,
   errorHoldMs: 8e3
+};
+const DEFAULT_COMPANION_PROTOCOL_CONFIG = {
+  enabled: true,
+  discoveryPath: "~/.desktop-ai-companion/discovery/companion.json",
+  socketPath: "~/.desktop-ai-companion/ipc/companion.sock",
+  messageMaxChars: 80,
+  cooldownMs: 1500,
+  defaultTtlMs: 6e3,
+  maxTtlMs: 15e3
 };
 const CODEX_RUNTIME_STATES = /* @__PURE__ */ new Set([
   "idle",
@@ -1047,6 +1155,20 @@ let codexRuntimeState = null;
 let codexRuntimeWatcher = null;
 let codexRuntimePollTimer = null;
 let codexRuntimeLastPayload = "";
+let companionProtocolConfig = { ...DEFAULT_COMPANION_PROTOCOL_CONFIG };
+let companionProtocolServer = null;
+let companionProtocolToken = "";
+let companionProtocolSocketPath = "";
+let companionProtocolDiscoveryPath = "";
+let companionProtocolLastError = null;
+let agentRuntimeState = null;
+let agentRuntimeTimer = null;
+let agentRuntimeLastPayload = "";
+let lastAgentMutationAt = 0;
+let agentConfirmation = null;
+let agentConfirmationTimer = null;
+let companionActivitySequence = 0;
+const companionActivities = [];
 let reminderPluginConfig = { ...DEFAULT_REMINDER_PLUGIN_CONFIG };
 let reminderService = null;
 let reminderRuntimeState = null;
@@ -1197,6 +1319,100 @@ async function readActiveActionRegistryConfig() {
   const registry = await readProfileJson(profile, "actionRegistryPath");
   return materializeRegistryAvailability(profile, registry);
 }
+async function readActiveInteractionRulesConfig() {
+  const profile = await activeProfileDefinition();
+  const rulesPath = profile.interactionRulesPath ?? "data/config/interaction_rules.config.json";
+  return readJsonPath(resolveProfilePath(rulesPath));
+}
+async function readProfileCapabilityManifest(profile) {
+  if (!profile.profileManifestPath) {
+    return null;
+  }
+  return readJsonPath(resolveProfilePath(profile.profileManifestPath));
+}
+function fallbackProfileCapabilityManifest(profile, ready) {
+  return {
+    version: 1,
+    profileId: profile.id,
+    label: profile.label,
+    stage: profile.locked ? "stable" : "in_progress",
+    summary: profile.description,
+    capabilities: {
+      mcpLayers: ["L1_basic_remote_control"],
+      states: {
+        ready: ready ? [profile.requiredAction] : [],
+        notReady: ready ? [] : [profile.requiredAction]
+      },
+      interactions: {
+        ready: [],
+        missingSource: [],
+        blockedByVideo: []
+      },
+      confirmation: {
+        currentEntry: "control_center_temp",
+        futureEntry: "companion_bubble_pending_assets"
+      }
+    },
+    assets: {
+      runtimeReadyActions: ready ? [profile.requiredAction] : [],
+      missingSourceActions: [],
+      blockedByVideoActions: [],
+      videoLedgerPath: "docs/10_video_supply_progress.md",
+      actionProgressPath: profile.actionProgressPath
+    },
+    distribution: {
+      publishable: false,
+      license: "TBD",
+      provenance: "profile manifest fallback",
+      notes: "No explicit profile manifest is configured."
+    }
+  };
+}
+function safeProfileCapabilitiesPayload(profile, summary, manifest) {
+  return {
+    profileId: profile.id,
+    label: profile.label,
+    description: profile.description,
+    stage: manifest.stage,
+    ready: summary.ready,
+    reason: summary.reason,
+    requiredAction: profile.requiredAction,
+    capabilities: manifest.capabilities,
+    assets: manifest.assets,
+    distribution: manifest.distribution
+  };
+}
+async function profileCapabilitiesPayload(params) {
+  const config = await loadPetProfileConfig();
+  const profileId = isRecord(params) && typeof params.profileId === "string" ? params.profileId.trim() : activeProfileId;
+  const profile = config.profiles[profileId];
+  if (!profile) {
+    throw new Error(`unknown profileId: ${profileId}`);
+  }
+  const summary = await summarizeProfile(profile);
+  const manifest = await readProfileCapabilityManifest(profile) ?? fallbackProfileCapabilityManifest(profile, summary.ready);
+  return safeProfileCapabilitiesPayload(profile, summary, manifest);
+}
+async function profileCapabilitiesSummaryPayload(profileId) {
+  const config = await loadPetProfileConfig();
+  const profile = config.profiles[profileId];
+  if (!profile) {
+    return null;
+  }
+  const summary = await summarizeProfile(profile);
+  const manifest = await readProfileCapabilityManifest(profile) ?? fallbackProfileCapabilityManifest(profile, summary.ready);
+  return {
+    profileId: profile.id,
+    stage: manifest.stage,
+    ready: summary.ready,
+    mcpLayers: manifest.capabilities.mcpLayers,
+    readyInteractions: manifest.capabilities.interactions.ready,
+    missingSourceActions: manifest.assets.missingSourceActions,
+    blockedByVideoActions: manifest.assets.blockedByVideoActions,
+    confirmationEntry: manifest.capabilities.confirmation.currentEntry,
+    videoLedger: manifest.assets.videoLedgerPath
+  };
+}
 function sendToRendererWindows(channel, payload) {
   for (const window of [mainWindowRef, controlCenterWindowRef]) {
     if (window && !window.isDestroyed()) {
@@ -1233,10 +1449,47 @@ function timestampMs(value) {
   const parsed = Date.parse(value);
   return Number.isNaN(parsed) ? null : parsed;
 }
+function safeSummaryText(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const validation = validateAgentMessage(value, { maxChars: companionProtocolConfig.messageMaxChars });
+  return validation.ok ? validation.message ?? null : null;
+}
+function recordCompanionActivity(type, summary, details = {}) {
+  companionActivitySequence += 1;
+  companionActivities.push({
+    id: companionActivitySequence,
+    type,
+    timestamp: nowIso(),
+    summary,
+    details
+  });
+  while (companionActivities.length > ACTIVITY_BUFFER_LIMIT) {
+    companionActivities.shift();
+  }
+}
+function activityLimitFromParams(params) {
+  if (params === void 0 || params === null) {
+    return ACTIVITY_DEFAULT_LIMIT;
+  }
+  if (!isRecord(params)) {
+    throw new Error("params must be an object");
+  }
+  if (params.limit === void 0) {
+    return ACTIVITY_DEFAULT_LIMIT;
+  }
+  const limit = numberValue(params.limit);
+  if (limit === void 0 || !Number.isInteger(limit) || limit < 0 || limit > ACTIVITY_BUFFER_LIMIT) {
+    throw new Error(`limit must be an integer between 0 and ${ACTIVITY_BUFFER_LIMIT}`);
+  }
+  return limit;
+}
 function registerConfigHandlers() {
   electron.ipcMain.handle("config:get-companion", () => readActiveCompanionConfig());
   electron.ipcMain.handle("config:get-states", () => readActiveStatesConfig());
   electron.ipcMain.handle("config:get-action-registry", () => readActiveActionRegistryConfig());
+  electron.ipcMain.handle("config:get-interaction-rules", () => readActiveInteractionRulesConfig());
 }
 function publishPetProfileState(state) {
   sendToRendererWindows(PET_PROFILE_CHANGED_CHANNEL, state);
@@ -1247,23 +1500,30 @@ function registerPetProfileHandlers() {
     if (typeof profileId !== "string") {
       throw new Error("Invalid pet profile id.");
     }
-    const config = await loadPetProfileConfig();
-    const profile = config.profiles[profileId];
-    if (!profile) {
-      throw new Error(`Unknown pet profile: ${profileId}`);
-    }
-    if (profile.id !== defaultPetProfileId(config) && !await profileReady(profile)) {
-      throw new Error(profile.description ? `${profile.label} 素材未就绪。` : "Pet profile is not ready.");
-    }
-    activeProfileId = profile.id;
-    activeCompanionConfig = await readActiveCompanionConfig();
-    manualRenderSelection = null;
-    await saveSelectedProfile();
-    publishManualRenderSelection();
-    const state = await petProfileState();
-    publishPetProfileState(state);
-    return state;
+    return selectPetProfile(profileId);
   });
+}
+async function selectPetProfile(profileId) {
+  const config = await loadPetProfileConfig();
+  const profile = config.profiles[profileId];
+  if (!profile) {
+    throw new Error(`Unknown pet profile: ${profileId}`);
+  }
+  if (profile.id !== defaultPetProfileId(config) && !await profileReady(profile)) {
+    throw new Error(profile.description ? `${profile.label} 素材未就绪。` : "Pet profile is not ready.");
+  }
+  activeProfileId = profile.id;
+  activeCompanionConfig = await readActiveCompanionConfig();
+  manualRenderSelection = null;
+  await saveSelectedProfile();
+  publishManualRenderSelection();
+  const state = await petProfileState();
+  publishPetProfileState(state);
+  recordCompanionActivity("profile_select", `profile selected: ${profile.id}`, {
+    profileId: profile.id,
+    ready: true
+  });
+  return state;
 }
 async function loadCodexPluginConfig() {
   try {
@@ -1275,6 +1535,18 @@ async function loadCodexPluginConfig() {
   } catch (error) {
     console.warn("Failed to load codex plugin config; using defaults.", error);
     return { ...DEFAULT_CODEX_PLUGIN_CONFIG };
+  }
+}
+async function loadCompanionProtocolConfig() {
+  try {
+    const pluginsConfig = await readJsonFile("data", "config", "plugins.config.json");
+    return {
+      ...DEFAULT_COMPANION_PROTOCOL_CONFIG,
+      ...pluginsConfig.plugins.companion_protocol
+    };
+  } catch (error) {
+    console.warn("Failed to load companion protocol config; using defaults.", error);
+    return { ...DEFAULT_COMPANION_PROTOCOL_CONFIG };
   }
 }
 async function loadReminderPluginConfig() {
@@ -1512,6 +1784,554 @@ function registerManualRenderHandlers() {
     return manualRenderSelection;
   });
 }
+function nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function ttlFromUnknown(value) {
+  const requestedTtl = numberValue(value);
+  if (requestedTtl === void 0) {
+    return companionProtocolConfig.defaultTtlMs;
+  }
+  return Math.min(Math.max(0, Math.round(requestedTtl)), companionProtocolConfig.maxTtlMs);
+}
+function confirmationTtlFromUnknown(value) {
+  const requestedTtl = numberValue(value);
+  if (requestedTtl === void 0) {
+    return CONFIRMATION_DEFAULT_TTL_MS;
+  }
+  return Math.min(Math.max(1e3, Math.round(requestedTtl)), CONFIRMATION_MAX_TTL_MS);
+}
+function publishAgentRuntimeState(nextState) {
+  const payload = JSON.stringify(nextState);
+  if (payload === agentRuntimeLastPayload) {
+    return;
+  }
+  agentRuntimeState = nextState;
+  agentRuntimeLastPayload = payload;
+  sendToRendererWindows(AGENT_RUNTIME_STATE_CHANNEL, nextState);
+  publishCompanionProtocolStatus();
+}
+function clearAgentRuntimeTimer() {
+  if (agentRuntimeTimer) {
+    clearTimeout(agentRuntimeTimer);
+    agentRuntimeTimer = null;
+  }
+}
+function setAgentRuntimeState(state, status, reaction, message, ttlMs) {
+  clearAgentRuntimeTimer();
+  if (state === "idle" || ttlMs === 0) {
+    publishAgentRuntimeState(null);
+    return null;
+  }
+  const timestamp = nowIso();
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  const nextState = {
+    source: "agent",
+    state,
+    status,
+    reaction,
+    message,
+    timestamp,
+    expiresAt,
+    isStale: false
+  };
+  publishAgentRuntimeState(nextState);
+  agentRuntimeTimer = setTimeout(() => {
+    publishAgentRuntimeState(null);
+    agentRuntimeTimer = null;
+  }, ttlMs);
+  return nextState;
+}
+function publishAgentConfirmation() {
+  sendToRendererWindows(AGENT_CONFIRMATION_CHANNEL, agentConfirmation);
+  publishCompanionProtocolStatus();
+}
+function clearAgentConfirmationTimer() {
+  if (agentConfirmationTimer) {
+    clearTimeout(agentConfirmationTimer);
+    agentConfirmationTimer = null;
+  }
+}
+function completeAgentConfirmation(status, resolvedBy) {
+  if (!agentConfirmation || agentConfirmation.status !== "pending") {
+    throw new Error("no pending confirmation request");
+  }
+  clearAgentConfirmationTimer();
+  agentConfirmation = {
+    ...agentConfirmation,
+    status,
+    respondedAt: nowIso(),
+    resolvedBy
+  };
+  recordCompanionActivity("confirmation_result", `confirmation ${status}`, {
+    requestId: agentConfirmation.requestId,
+    status,
+    resolvedBy
+  });
+  publishAgentConfirmation();
+  if (status === "allowed") {
+    setAgentRuntimeState("success", "done", null, "已允许", CONFIRMATION_FEEDBACK_TTL_MS);
+  } else if (status === "denied") {
+    setAgentRuntimeState("error", "blocked", null, "已拒绝", CONFIRMATION_FEEDBACK_TTL_MS);
+  } else {
+    clearAgentRuntimeTimer();
+    publishAgentRuntimeState(null);
+  }
+  return agentConfirmation;
+}
+function expireAgentConfirmation() {
+  if (!agentConfirmation || agentConfirmation.status !== "pending") {
+    return;
+  }
+  completeAgentConfirmation("expired", "timeout");
+}
+function createAgentConfirmation(params) {
+  if (agentConfirmation?.status === "pending") {
+    throw new Error("confirmation request already pending");
+  }
+  const titleValidation = validateAgentMessage(params.title, {
+    maxChars: companionProtocolConfig.messageMaxChars
+  });
+  if (!titleValidation.ok) {
+    throw new Error(titleValidation.error ?? "invalid title");
+  }
+  const messageValidation = validateAgentMessage(params.message, {
+    maxChars: companionProtocolConfig.messageMaxChars
+  });
+  if (!messageValidation.ok) {
+    throw new Error(messageValidation.error ?? "invalid message");
+  }
+  const ttlMs = confirmationTtlFromUnknown(params.ttlMs);
+  const createdAt = nowIso();
+  const expiresAt = new Date(Date.now() + ttlMs).toISOString();
+  agentConfirmation = {
+    requestId: `confirm-${Date.now()}-${node_crypto.randomBytes(4).toString("hex")}`,
+    status: "pending",
+    title: titleValidation.message ?? "",
+    message: messageValidation.message ?? "",
+    createdAt,
+    expiresAt,
+    respondedAt: null,
+    resolvedBy: null
+  };
+  recordCompanionActivity("confirmation_request", agentConfirmation.title, {
+    requestId: agentConfirmation.requestId,
+    status: agentConfirmation.status
+  });
+  publishAgentConfirmation();
+  setAgentRuntimeState("waiting_auth", "waiting_auth", null, agentConfirmation.title, ttlMs);
+  agentConfirmationTimer = setTimeout(expireAgentConfirmation, ttlMs);
+  openControlCenterWindow("integrations").catch((error) => {
+    console.warn("Failed to open control center for confirmation.", error);
+  });
+  return agentConfirmation;
+}
+function respondAgentConfirmation(requestId, action) {
+  if (!agentConfirmation || agentConfirmation.status !== "pending") {
+    throw new Error("no pending confirmation request");
+  }
+  if (agentConfirmation.requestId !== requestId) {
+    throw new Error("confirmation request id mismatch");
+  }
+  if (action === "allow") {
+    return completeAgentConfirmation("allowed", "user");
+  }
+  if (action === "deny") {
+    return completeAgentConfirmation("denied", "user");
+  }
+  if (action === "cancel") {
+    return completeAgentConfirmation("cancelled", "user");
+  }
+  throw new Error("unsupported confirmation action");
+}
+function assertAgentCooldown() {
+  const elapsedMs = Date.now() - lastAgentMutationAt;
+  if (elapsedMs < companionProtocolConfig.cooldownMs) {
+    throw new Error(`cooldown active; retry in ${companionProtocolConfig.cooldownMs - elapsedMs}ms`);
+  }
+  lastAgentMutationAt = Date.now();
+}
+function companionProtocolStatus() {
+  return {
+    enabled: companionProtocolConfig.enabled,
+    running: Boolean(companionProtocolServer),
+    protocolVersion: COMPANION_PROTOCOL_VERSION,
+    transport: "unix-socket",
+    socketPath: companionProtocolSocketPath || null,
+    discoveryPath: companionProtocolDiscoveryPath || null,
+    appVersion: electron.app.getVersion(),
+    methods: [...COMPANION_PROTOCOL_METHODS],
+    agentState: agentRuntimeState,
+    confirmation: agentConfirmation,
+    lastError: companionProtocolLastError
+  };
+}
+function publishCompanionProtocolStatus() {
+  sendToRendererWindows(COMPANION_PROTOCOL_STATUS_CHANNEL, companionProtocolStatus());
+}
+async function protocolStatusPayload() {
+  const profiles = await petProfileState();
+  return {
+    appVersion: electron.app.getVersion(),
+    protocolVersion: COMPANION_PROTOCOL_VERSION,
+    transport: "unix-socket",
+    activeProfileId,
+    profiles,
+    agentState: agentRuntimeState,
+    confirmation: agentConfirmation,
+    codexState: codexRuntimeState,
+    methods: [...COMPANION_PROTOCOL_METHODS]
+  };
+}
+function safeCodexSummary() {
+  if (!codexRuntimeState) {
+    return null;
+  }
+  return {
+    source: codexRuntimeState.source,
+    state: codexRuntimeState.state,
+    message: safeSummaryText(codexRuntimeState.message),
+    task: safeSummaryText(codexRuntimeState.task),
+    event: safeSummaryText(codexRuntimeState.event),
+    toolName: safeSummaryText(codexRuntimeState.toolName),
+    exitCode: codexRuntimeState.exitCode,
+    timestamp: codexRuntimeState.timestamp,
+    isStale: codexRuntimeState.isStale
+  };
+}
+function safeAgentSummary() {
+  if (!agentRuntimeState) {
+    return null;
+  }
+  return {
+    source: agentRuntimeState.source,
+    state: agentRuntimeState.state,
+    status: agentRuntimeState.status,
+    message: safeSummaryText(agentRuntimeState.message),
+    reaction: agentRuntimeState.reaction,
+    timestamp: agentRuntimeState.timestamp,
+    expiresAt: agentRuntimeState.expiresAt,
+    isStale: agentRuntimeState.isStale
+  };
+}
+function safeConfirmationSummary() {
+  if (!agentConfirmation) {
+    return null;
+  }
+  return {
+    requestId: agentConfirmation.requestId,
+    status: agentConfirmation.status,
+    title: safeSummaryText(agentConfirmation.title),
+    createdAt: agentConfirmation.createdAt,
+    expiresAt: agentConfirmation.expiresAt,
+    respondedAt: agentConfirmation.respondedAt,
+    resolvedBy: agentConfirmation.resolvedBy
+  };
+}
+async function contextSummaryPayload() {
+  const profiles = await petProfileState();
+  const profileCapabilitiesSummary = await profileCapabilitiesSummaryPayload(profiles.activeProfileId);
+  return {
+    appVersion: electron.app.getVersion(),
+    protocolVersion: COMPANION_PROTOCOL_VERSION,
+    activeProfileId: profiles.activeProfileId,
+    defaultProfileId: profiles.defaultProfileId,
+    profiles: profiles.profiles.map((profile) => ({
+      id: profile.id,
+      label: profile.label,
+      selected: profile.selected,
+      ready: profile.ready,
+      reason: profile.reason,
+      requiredAction: profile.requiredAction
+    })),
+    agentState: safeAgentSummary(),
+    confirmation: safeConfirmationSummary(),
+    codexState: safeCodexSummary(),
+    methods: [...COMPANION_PROTOCOL_METHODS],
+    profileCapabilitiesSummary,
+    videoSupply: {
+      ledger: "docs/10_video_supply_progress.md",
+      generatedDetail: "docs/generated/profiles/guofeng_ai/action_progress.md",
+      v12BlockedProfile: "guofeng_ai",
+      v12BlockedActions: [...V12_BLOCKED_INTERACTION_ACTIONS],
+      completedInteractionActions: ["mouse_hover_look", "mouse_shy_loop", "mouse_leave_back", "drag_hold_lift"]
+    }
+  };
+}
+function activityListPayload(params) {
+  const limit = activityLimitFromParams(params);
+  return {
+    activities: limit === 0 ? [] : companionActivities.slice(-limit)
+  };
+}
+async function handleCompanionProtocolMethod(method, params) {
+  if (method === "companion.status") {
+    return protocolStatusPayload();
+  }
+  if (method === "companion.react") {
+    if (!isRecord(params)) {
+      throw new Error("params must be an object");
+    }
+    const reaction = stringValue(params.reaction);
+    if (!reaction) {
+      throw new Error("reaction is required");
+    }
+    const state = mapAgentReaction(reaction);
+    if (!state) {
+      throw new Error(`unsupported reaction: ${reaction}`);
+    }
+    assertAgentCooldown();
+    const nextState = setAgentRuntimeState(state, null, reaction.trim().toLowerCase(), null, ttlFromUnknown(params.ttlMs));
+    recordCompanionActivity("react", `reaction: ${reaction.trim().toLowerCase()}`, {
+      reaction: reaction.trim().toLowerCase(),
+      state
+    });
+    return { state, reaction: reaction.trim().toLowerCase(), agentState: nextState };
+  }
+  if (method === "companion.say") {
+    if (!isRecord(params)) {
+      throw new Error("params must be an object");
+    }
+    const validation = validateAgentMessage(params.message, {
+      maxChars: companionProtocolConfig.messageMaxChars
+    });
+    if (!validation.ok) {
+      throw new Error(validation.error ?? "invalid message");
+    }
+    let reaction = null;
+    let state = "reminder";
+    if (params.reaction !== void 0) {
+      reaction = stringValue(params.reaction) ?? null;
+      if (!reaction) {
+        throw new Error("reaction must be a string");
+      }
+      const mappedState = mapAgentReaction(reaction);
+      if (!mappedState) {
+        throw new Error(`unsupported reaction: ${reaction}`);
+      }
+      state = mappedState;
+    }
+    assertAgentCooldown();
+    const nextState = setAgentRuntimeState(
+      state,
+      null,
+      reaction ? reaction.trim().toLowerCase() : null,
+      validation.message ?? null,
+      ttlFromUnknown(params.ttlMs)
+    );
+    recordCompanionActivity("say", validation.message ?? "message shown", {
+      state,
+      reaction: reaction ? reaction.trim().toLowerCase() : null
+    });
+    return { state, message: validation.message, agentState: nextState };
+  }
+  if (method === "companion.agent.set_state") {
+    if (!isRecord(params)) {
+      throw new Error("params must be an object");
+    }
+    const status = stringValue(params.status);
+    if (!status) {
+      throw new Error("status is required");
+    }
+    const normalizedStatus = normalizeAgentStatus(status);
+    const state = mapAgentStatus(status);
+    if (!normalizedStatus || !state) {
+      throw new Error(`unsupported agent status: ${status}`);
+    }
+    let message = null;
+    if (params.message !== void 0) {
+      const validation = validateAgentMessage(params.message, {
+        maxChars: companionProtocolConfig.messageMaxChars
+      });
+      if (!validation.ok) {
+        throw new Error(validation.error ?? "invalid message");
+      }
+      message = validation.message ?? null;
+    }
+    if (state === "idle") {
+      clearAgentRuntimeTimer();
+      publishAgentRuntimeState(null);
+      recordCompanionActivity("agent_clear", "agent state cleared", {
+        status: normalizedStatus
+      });
+      return { status: normalizedStatus, state, agentState: null };
+    }
+    assertAgentCooldown();
+    const nextState = setAgentRuntimeState(state, normalizedStatus, null, message, ttlFromUnknown(params.ttlMs));
+    recordCompanionActivity("agent_state", `agent ${normalizedStatus}`, {
+      status: normalizedStatus,
+      state
+    });
+    return { status: normalizedStatus, state, message, agentState: nextState };
+  }
+  if (method === "companion.agent.get_state") {
+    return { agentState: agentRuntimeState };
+  }
+  if (method === "companion.agent.clear_state") {
+    clearAgentRuntimeTimer();
+    publishAgentRuntimeState(null);
+    recordCompanionActivity("agent_clear", "agent state cleared", {
+      status: null
+    });
+    return { agentState: null };
+  }
+  if (method === "companion.confirm.request") {
+    if (!isRecord(params)) {
+      throw new Error("params must be an object");
+    }
+    return createAgentConfirmation(params);
+  }
+  if (method === "companion.confirm.get") {
+    return { confirmation: agentConfirmation };
+  }
+  if (method === "companion.confirm.cancel") {
+    return completeAgentConfirmation("cancelled", "agent");
+  }
+  if (method === "companion.context.summary") {
+    return contextSummaryPayload();
+  }
+  if (method === "companion.activity.list") {
+    return activityListPayload(params);
+  }
+  if (method === "companion.profile.list") {
+    return petProfileState();
+  }
+  if (method === "companion.profile.capabilities") {
+    return profileCapabilitiesPayload(params);
+  }
+  if (method === "companion.profile.select") {
+    if (!isRecord(params)) {
+      throw new Error("params must be an object");
+    }
+    const profileId = stringValue(params.profileId);
+    if (!profileId) {
+      throw new Error("profileId is required");
+    }
+    return selectPetProfile(profileId);
+  }
+  throw new Error(`unknown method: ${method}`);
+}
+function protocolResponse(id, ok, payload) {
+  return `${JSON.stringify(ok ? { id, ok, result: payload } : { id, ok, error: payload })}
+`;
+}
+async function handleProtocolRequest(rawLine, socket) {
+  let request;
+  try {
+    request = JSON.parse(rawLine);
+  } catch {
+    recordCompanionActivity("protocol_error", "invalid JSON", {
+      method: null
+    });
+    socket.write(protocolResponse(null, false, "invalid JSON"));
+    return;
+  }
+  if (!isRecord(request)) {
+    recordCompanionActivity("protocol_error", "request must be an object", {
+      method: null
+    });
+    socket.write(protocolResponse(null, false, "request must be an object"));
+    return;
+  }
+  const id = request.id ?? null;
+  const method = stringValue(request.method);
+  if (request.token !== companionProtocolToken) {
+    recordCompanionActivity("protocol_error", "unauthorized", {
+      method: method ?? null
+    });
+    socket.write(protocolResponse(id, false, "unauthorized"));
+    return;
+  }
+  if (!method) {
+    recordCompanionActivity("protocol_error", "method is required", {
+      method: null
+    });
+    socket.write(protocolResponse(id, false, "method is required"));
+    return;
+  }
+  try {
+    const result = await handleCompanionProtocolMethod(method, request.params);
+    socket.write(protocolResponse(id, true, result));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "request failed";
+    recordCompanionActivity("protocol_error", message, {
+      method
+    });
+    socket.write(protocolResponse(id, false, message));
+  }
+}
+function handleProtocolSocket(socket) {
+  socket.setEncoding("utf8");
+  let buffer = "";
+  socket.on("data", (chunk) => {
+    buffer += chunk;
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? "";
+    for (const line of lines) {
+      const trimmedLine = line.trim();
+      if (trimmedLine) {
+        handleProtocolRequest(trimmedLine, socket).catch((error) => {
+          socket.write(protocolResponse(null, false, error instanceof Error ? error.message : "request failed"));
+        });
+      }
+    }
+  });
+}
+async function writeCompanionProtocolDiscovery() {
+  const discovery = {
+    appName: "Desktop AI Companion",
+    appVersion: electron.app.getVersion(),
+    protocolVersion: COMPANION_PROTOCOL_VERSION,
+    pid: process.pid,
+    transport: "unix-socket",
+    socketPath: companionProtocolSocketPath,
+    token: companionProtocolToken,
+    methods: [...COMPANION_PROTOCOL_METHODS],
+    createdAt: nowIso()
+  };
+  await promises.mkdir(node_path.dirname(companionProtocolDiscoveryPath), { recursive: true });
+  await promises.writeFile(companionProtocolDiscoveryPath, `${JSON.stringify(discovery, null, 2)}
+`, "utf8");
+}
+async function startCompanionProtocolService() {
+  companionProtocolConfig = await loadCompanionProtocolConfig();
+  companionProtocolSocketPath = resolveRuntimePath(companionProtocolConfig.socketPath);
+  companionProtocolDiscoveryPath = resolveRuntimePath(companionProtocolConfig.discoveryPath);
+  companionProtocolLastError = null;
+  if (!companionProtocolConfig.enabled) {
+    publishCompanionProtocolStatus();
+    return;
+  }
+  companionProtocolToken = node_crypto.randomBytes(24).toString("hex");
+  await promises.mkdir(node_path.dirname(companionProtocolSocketPath), { recursive: true });
+  await promises.mkdir(node_path.dirname(companionProtocolDiscoveryPath), { recursive: true });
+  await promises.rm(companionProtocolSocketPath, { force: true });
+  companionProtocolServer = node_net.createServer(handleProtocolSocket);
+  companionProtocolServer.on("error", (error) => {
+    companionProtocolLastError = error instanceof Error ? error.message : "protocol server error";
+    publishCompanionProtocolStatus();
+  });
+  await new Promise((resolvePromise, rejectPromise) => {
+    companionProtocolServer?.once("error", rejectPromise);
+    companionProtocolServer?.listen(companionProtocolSocketPath, () => {
+      companionProtocolServer?.off("error", rejectPromise);
+      resolvePromise();
+    });
+  });
+  await writeCompanionProtocolDiscovery();
+  publishCompanionProtocolStatus();
+}
+function stopCompanionProtocolServiceSync() {
+  clearAgentRuntimeTimer();
+  companionProtocolServer?.close();
+  companionProtocolServer = null;
+  if (companionProtocolSocketPath) {
+    node_fs.rmSync(companionProtocolSocketPath, { force: true });
+  }
+  if (companionProtocolDiscoveryPath) {
+    node_fs.rmSync(companionProtocolDiscoveryPath, { force: true });
+  }
+}
 function publishShortcutsUpdated() {
   sendToRendererWindows(SHORTCUTS_UPDATED_CHANNEL, shortcutService?.list() ?? []);
 }
@@ -1520,7 +2340,7 @@ function publishInputPermissionStatus(status) {
   sendToRendererWindows(INPUT_PERMISSION_STATUS_CHANNEL, status);
 }
 function controlCenterModuleFromUnknown(value) {
-  return value === "tasks" || value === "reminders" || value === "settings" || value === "status" ? value : "status";
+  return value === "tasks" || value === "reminders" || value === "settings" || value === "integrations" || value === "status" ? value : "status";
 }
 function controlCenterUrl(module) {
   return process.env.ELECTRON_RENDERER_URL ? `${process.env.ELECTRON_RENDERER_URL}?window=control-center&module=${module}` : node_url.pathToFileURL(node_path.join(__dirname, "../renderer/index.html")).toString() + `?window=control-center&module=${module}`;
@@ -1805,6 +2625,20 @@ async function readAndPublishCodexRuntimeState() {
 }
 function registerCodexRuntimeHandlers() {
   electron.ipcMain.handle("codex:get-runtime-state", () => codexRuntimeState);
+}
+function registerCompanionProtocolHandlers() {
+  electron.ipcMain.handle("agent:get-runtime-state", () => agentRuntimeState);
+  electron.ipcMain.handle("agent:get-confirmation", () => agentConfirmation);
+  electron.ipcMain.handle("agent:respond-confirmation", (_event, requestId, action) => {
+    if (typeof requestId !== "string") {
+      throw new Error("confirmation request id is required");
+    }
+    if (action !== "allow" && action !== "deny" && action !== "cancel") {
+      throw new Error("unsupported confirmation action");
+    }
+    return respondAgentConfirmation(requestId, action);
+  });
+  electron.ipcMain.handle("companion-protocol:get-status", () => companionProtocolStatus());
 }
 async function startCodexRuntimeService() {
   codexPluginConfig = await loadCodexPluginConfig();
@@ -2238,6 +3072,7 @@ electron.app.whenReady().then(async () => {
   registerManualRenderHandlers();
   registerShortcutHandlers();
   registerCodexRuntimeHandlers();
+  registerCompanionProtocolHandlers();
   registerReminderHandlers();
   registerTaskHandlers();
   registerAssetProtocol();
@@ -2245,6 +3080,7 @@ electron.app.whenReady().then(async () => {
   await shortcutService.load();
   await startTaskService();
   await startCodexRuntimeService();
+  await startCompanionProtocolService();
   await startReminderService();
   await createMainWindow();
   registerShortcuts();
@@ -2264,6 +3100,7 @@ electron.app.on("will-quit", () => {
   if (codexRuntimePollTimer) {
     clearInterval(codexRuntimePollTimer);
   }
+  stopCompanionProtocolServiceSync();
   if (reminderPollTimer) {
     clearInterval(reminderPollTimer);
   }
