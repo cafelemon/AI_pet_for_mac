@@ -1,6 +1,6 @@
 # Process And Progress
 
-更新时间：2026-05-31
+更新时间：2026-06-01
 
 ## 工作流程
 
@@ -12,9 +12,9 @@
 6. 完成后运行与改动范围匹配的验证命令。
 7. 更新进度和决策记录。
 
-## 当前状态：V1.1.8
+## 当前状态：V1.4.0
 
-日期：2026-05-31
+日期：2026-06-01
 
 已完成：
 
@@ -41,16 +41,20 @@
 - `V1.1.6` 完成 MCP 用户确认流。
 - `V1.1.7` 完成视频供给台账和 MCP 上下文摘要。
 - `V1.1.8` 完成 profile 能力声明和 MCP 查询入口。
+- `V1.1.9` 完成 MCP permission policy 最小治理层。
+- `V1.2.0` 完成 `guofeng_ai` click/drag 用户交互动作补齐。
+- `V1.2.1` 修复 Codex 授权提示残留和确认入口混淆。
+- `V1.2.2` 修复人物点击穿透，并将拖动起始态提升为 `6.0x`。
+- `V1.2.3` 校准头部实体命中区域，修复头部点击难以触发。
+- `V1.3.0` 完成本地 Profile Package：内置角色可导出，控制中心可导入和移除非内置角色，缺非核心视频只形成 warning。
+- `V1.4.0` 完成声明式插件运行时：安全 JSON manifest、低优先级展示反馈、控制中心插件页、只读 MCP summary 和 contract。
 
 ## 当前待办
 
-- 为 V1.2.0 继续生成 click/drag P1-A 高质量 AI 视频源。
-- 源视频到位后运行 WebM/keyframe/QA 管线，并将 click/drag 动作标记 runtime ready。
 - 手动验证 click/drag 交互。
-- 继续梳理 profile package manifest 字段，`V1.1.8` 已先落地 profile capability manifest。
-- 补齐 P1-A 用户交互 source videos。
+- 等待用户补充新的 `mouse_leave_back` 视频，替换当前 QA 不合格的临时素材。
 - 继续推进 `guofeng_ai` profile 素材完整度。
-- L4 `companion.events.subscribe` 尚未实现，后续单独推进；L5 已先落地最小 profile capability manifest。
+- L4 `companion.events.subscribe` 尚未实现，后续单独推进；L5 已先落地 profile capability manifest 和 permission policy。
 
 ## V1.1.2 过程记录
 
@@ -93,7 +97,7 @@
 - 新增 `docs/09_mcp_capability_blueprint.md`。
 - 明确 L1 当前 MCP 能力已经完成，L2-L5 作为后续规划。
 - 明确 `V1.1.3` 继续作为当前运行版本，`V1.1.4` 不改 package 版本。
-- 明确 click/drag 缺素材动作继续留在 `V1.2.0`，不标记 runtime ready。
+- 当时明确 click/drag 缺素材动作继续留在 `V1.2.0`，当前已在 `V1.2.0` 补齐。
 - 明确后续新增 MCP 方法前需要同步 protocol、adapter、contract check 和 Codex MCP smoke test。
 
 ## V1.1.5 过程记录
@@ -151,31 +155,95 @@
 已完成：
 
 - 新增 `profile_manifest.config.json`，分别覆盖 `guofeng_ai` 与 `legacy_real`。
-- `guofeng_ai` 明确标记鼠标害羞链路和 `drag_hold_lift` 已 ready，四个 click/drag P0 动作缺 source。
+- `guofeng_ai` 当时明确标记鼠标害羞链路和 `drag_hold_lift` 已 ready，四个 click/drag P0 动作缺 source；当前 manifest 已随 `V1.2.0` 更新为 ready。
 - `legacy_real` 使用保守能力声明，不继承古风 profile 交互。
 - 新增 `companion.profile.capabilities` 和 `companion_profile_capabilities`。
 - `context.summary` 增加 `profileCapabilitiesSummary`。
 - 文档明确 L4 `companion.events.subscribe` 尚未实现。
 - package 版本升到 `1.1.8`。
 
+## V1.1.9 过程记录
+
+日期：2026-06-01
+版本：V1.1.9
+类型：PATCH / protocol / governance
+
+已完成：
+
+- 新增 `data/config/permission_policy.config.json`。
+- 新增 `companion.permissions.summary` 和 `companion_permissions_summary`。
+- `context.summary` 增加 `permissionPolicySummary`。
+- Electron main 在 local protocol method 执行前做最小 allow/deny 检查。
+- 控制中心 AI 接入面板展示 policy enabled、blocked count 和 confirmation-required count。
+- 默认策略不阻断既有 MCP 能力。
+- contract check 覆盖所有 methods 都有 permission rule，以及 disabled method 返回 permission denied。
+- package 版本升到 `1.1.9`。
+
 ## V1.2.0 过程记录
 
-日期：2026-05-29
-版本：V1.2.0 in progress
+日期：2026-06-01
+版本：V1.2.0
 类型：MINOR / asset / runtime
 
 已完成：
 
 - 新增 `guofeng_ai` profile-scoped interaction rules。
 - Renderer 新增 profile-scoped interaction 调度底座；hover/leave 已在 `V1.1.2` 形成完整链路，并在 `V1.1.3` 调整节奏。
-- 拖拽保持继续复用已完成的 `drag_hold_lift`。
-- 为 P1-A click/drag 动作记录高质量 AI 视频生成提示词、源视频路径和转换命令。
-- `npm run typecheck`、`npm run agent:contract`、`python3 scripts/pb2_video_pipeline.py check --profile guofeng_ai --skip-missing`、`python3 scripts/asset_check.py --profile guofeng_ai --strict --webm-strict` 已通过。
+- 接入四个桌面新增源视频：`点击头部.mp4`、`点击身体.mp4`、`拖动起始衔接.mp4`、`拖动回落衔接.mp4`。
+- 生成 `click_head_happy`、`click_body_confused`、`drag_start_lift`、`drag_end_dizzy` 透明 WebM、fallback keyframe 和多底色 QA。
+- `drag_start_lift` 和 `drag_end_dizzy` 使用 `2.0x` 输出加速。
+- `drag_hold_lift` 已按 `drag_start_lift` 尾帧和 `drag_end_dizzy` 首帧重新校准。
+- Renderer 新增点击命中区域上半/下半分流，分别触发 `click_head` 和 `click_body`。
+- `interaction_rules.config.json` 启用 click/drag start/hold/end。
+- package 版本升到 `1.2.0`。
 
 风险：
 
-- click/drag source videos 尚未完整生成。
-- P1-A 动作仍不可标记为完整 runtime ready，package 版本暂不升到 `1.2.0`。
+- 手动 click/drag 交互仍需在桌面 app 中最终确认触发手感。
+
+## V1.2.1 过程记录
+
+日期：2026-06-01
+版本：V1.2.1
+类型：PATCH / runtime / docs
+
+已完成：
+
+- 区分 Codex PermissionRequest 与 MCP confirmation：Codex 文案改为“请在 Codex 中确认授权”。
+- Codex hook 的 `waiting_auth` 写入 60 秒 `expiresAt`。
+- Electron main 对旧格式无 `expiresAt` 的 Codex `waiting_auth` 增加 60 秒自动失效规则。
+- MCP `companion.confirm.request` 的控制中心临时确认入口保持不变。
+- package 版本升到 `1.2.1`。
+
+## V1.2.2 过程记录
+
+日期：2026-06-01
+版本：V1.2.2
+类型：PATCH / runtime / asset / docs
+
+已完成：
+
+- macOS input helper 新增 profile-scoped 普通左键精准捕获，只拦截人物 alpha 命中区域。
+- 新增 `interaction:click` renderer IPC，复用头部/身体点击分流。
+- Option + 左键继续用于抓起拖动；人物外透明区域继续穿透。
+- `drag_start_lift` 从 `2.0x` 提升为 `6.0x`，重新生成透明 WebM、keyframe 和多底色 QA。
+- `mouse_leave_back` 标记为临时可运行但 QA 不合格，等待替换视频。
+- package 版本升到 `1.2.2`。
+
+## V1.2.3 过程记录
+
+日期：2026-06-01
+版本：V1.2.3
+类型：PATCH / runtime / docs
+
+已完成：
+
+- `guofeng_ai` 新增 profile-scoped `hitZones`，头部区间为人物实体 bbox 顶部 `34%`。
+- 人物 alpha 轮廓点击容差调整为 `10px`。
+- 动作切换时保留上一帧有效 regions，避免异步重建期间头部点击落空。
+- 拖动开始时直接进入 `drag_hold_lift` 循环，不再派发 `drag_start_lift`。
+- 拖动释放后保留 `drag_end_dizzy` 落地收尾动作。
+- package 版本升到 `1.2.3`。
 
 ## 过程记录模板
 
@@ -192,4 +260,45 @@
 
 ## 下一次推荐切入
 
-建议下一步在不等视频的前提下继续推进插件/权限/偏好等 companion kernel 能力；L4 `companion.events.subscribe` 仍作为单独 TODO 保留。视频素材到位后再回到 `V1.2.0` click/drag 补齐。
+建议先手动验收人物点击和 Option 拖动手感，并从控制中心导入一个非内置测试包。新 `mouse_leave_back` 视频到位后优先替换；代码层可继续推进长期偏好或 L4 `companion.events.subscribe`。
+
+## V1.3.0 过程记录
+
+日期：2026-06-01
+版本：V1.3.0
+类型：MINOR / profile package / distribution
+
+已完成：
+
+- 为 `legacy_real` 和 `guofeng_ai` 新增 package manifest。
+- 新增 `scripts/profile_package.py`，支持 `export / inspect / validate / install`。
+- 控制中心设置页新增本地角色包导入和非内置角色移除入口。
+- Electron main 合并内置与已安装 profile，并为已安装资产提供受控 namespace。
+- 安装校验拒绝路径穿越、绝对路径、符号链接、可执行脚本、异常包和覆盖内置 profile。
+- 缺非核心视频允许安装并形成 warning；缺 `idle` 或必需配置时禁止切换。
+- `npm run profile:contract` 覆盖导出、校验、重复安装和恶意包拒绝。
+- 已手动导入非内置测试包，验证 warning、切换、已安装资产渲染、移除和回落默认 profile；测试后恢复为 `guofeng_ai`。
+- package 版本升到 `1.3.0`。
+
+## V1.4.0 过程记录
+
+日期：2026-06-02
+版本：V1.4.0
+类型：MINOR / declarative plugin runtime / governance
+
+已完成：
+
+- 新增 `app/electron/declarativePlugins.ts`，集中处理加载、严格校验、启停持久化、调度、cooldown、TTL、summary 和错误。
+- 新增三个默认关闭内置示例：`idle_greeting`、`agent_done_encouragement`、`guofeng_ambient_action`。
+- 新增低优先级 `plugin:feedback` renderer IPC；高优先级 runtime 由 main 拒绝，本地 hover/click/drag 由 renderer 二次拒绝或中断。
+- 控制中心新增“插件”页，支持启停与刷新本地目录。
+- 新增 `companion.plugins.summary`、`companion_plugins_summary` 和 `context.summary.pluginSummary`。
+- activity ring buffer 新增 `plugin_trigger / plugin_skip / plugin_error`。
+- 新增 `npm run plugin:contract`。
+- package 版本升到 `1.4.0`；profile package 自身版本仍保持 `1.3.0`。
+
+边界：
+
+- 不开放 JS、shell、动态模块、网络请求、文件写入或插件压缩包导入。
+- L4 `companion.events.subscribe` 继续保留为后续 TODO。
+- 缺失或 QA 不合格视频继续只更新台账和 manifest，不生成占位素材。

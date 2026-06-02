@@ -15,7 +15,10 @@ const PET_PROFILE_CHANGED_CHANNEL = "pet-profile:changed";
 const CONTROL_CENTER_MODULE_CHANNEL = "control-center:module";
 const SHORTCUTS_UPDATED_CHANNEL = "shortcuts:updated";
 const INPUT_PERMISSION_STATUS_CHANNEL = "input-permission:status";
+const INTERACTION_CLICK_CHANNEL = "interaction:click";
 const INTERACTION_DRAG_ACTIVE_CHANNEL = "interaction:drag-active";
+const DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL = "plugin:feedback";
+const DECLARATIVE_PLUGINS_UPDATED_CHANNEL = "plugin:updated";
 const COMPANION_COMMANDS = /* @__PURE__ */ new Set([
   "next-state",
   "previous-state",
@@ -40,6 +43,14 @@ const companionAPI = {
   getInteractionRulesConfig: () => electron.ipcRenderer.invoke("config:get-interaction-rules"),
   getPetProfiles: () => electron.ipcRenderer.invoke("pet-profile:list"),
   setPetProfile: (profileId) => electron.ipcRenderer.invoke("pet-profile:set", profileId),
+  importPetProfile: () => electron.ipcRenderer.invoke("pet-profile:import"),
+  removePetProfile: (profileId) => electron.ipcRenderer.invoke("pet-profile:remove", profileId),
+  getDeclarativePlugins: () => electron.ipcRenderer.invoke("plugins:get-summary"),
+  setDeclarativePluginEnabled: (pluginId, enabled) => electron.ipcRenderer.invoke("plugins:set-enabled", pluginId, enabled),
+  refreshDeclarativePlugins: () => electron.ipcRenderer.invoke("plugins:refresh"),
+  reportDeclarativePluginFeedback: (result) => {
+    electron.ipcRenderer.send("plugins:feedback-result", result);
+  },
   assetUrl: (relativePath) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => electron.ipcRenderer.invoke("codex:get-runtime-state"),
   getAgentRuntimeState: () => electron.ipcRenderer.invoke("agent:get-runtime-state"),
@@ -63,6 +74,7 @@ const companionAPI = {
   setMouseMode: (mode) => electron.ipcRenderer.invoke("window:set-mouse-mode", mode),
   setMouseHitTest: (canInteract) => electron.ipcRenderer.invoke("window:set-mouse-hit-test", canInteract),
   setMouseHitRegions: (regions) => electron.ipcRenderer.invoke("window:set-mouse-hit-regions", regions),
+  setNativeClickCapture: (enabled) => electron.ipcRenderer.invoke("window:set-native-click-capture", enabled),
   setWindowDragActive: (active) => electron.ipcRenderer.invoke("window:set-drag-active", active),
   moveWindowBy: (deltaX, deltaY) => electron.ipcRenderer.invoke("window:move-by", deltaX, deltaY),
   setMousePassthrough: (enabled) => electron.ipcRenderer.invoke("window:set-mouse-passthrough", enabled),
@@ -138,6 +150,15 @@ const companionAPI = {
     electron.ipcRenderer.on(INPUT_PERMISSION_STATUS_CHANNEL, listener);
     return () => {
       electron.ipcRenderer.removeListener(INPUT_PERMISSION_STATUS_CHANNEL, listener);
+    };
+  },
+  onInteractionClick: (callback) => {
+    const listener = (_event, point) => {
+      callback(point);
+    };
+    electron.ipcRenderer.on(INTERACTION_CLICK_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(INTERACTION_CLICK_CHANNEL, listener);
     };
   },
   onInteractionDragActive: (callback) => {
@@ -219,6 +240,24 @@ const companionAPI = {
     electron.ipcRenderer.on(TASKS_UPDATED_CHANNEL, listener);
     return () => {
       electron.ipcRenderer.removeListener(TASKS_UPDATED_CHANNEL, listener);
+    };
+  },
+  onDeclarativePluginFeedback: (callback) => {
+    const listener = (_event, feedback) => {
+      callback(feedback);
+    };
+    electron.ipcRenderer.on(DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL, listener);
+    };
+  },
+  onDeclarativePluginsUpdated: (callback) => {
+    const listener = (_event, summary) => {
+      callback(summary);
+    };
+    electron.ipcRenderer.on(DECLARATIVE_PLUGINS_UPDATED_CHANNEL, listener);
+    return () => {
+      electron.ipcRenderer.removeListener(DECLARATIVE_PLUGINS_UPDATED_CHANNEL, listener);
     };
   }
 };

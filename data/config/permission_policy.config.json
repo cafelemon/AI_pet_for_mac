@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "enabled": true,
+  "rules": {
+    "companion.status": {
+      "method": "companion.status",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read app, profile, protocol, agent, confirmation and Codex status."
+    },
+    "companion.react": {
+      "method": "companion.react",
+      "group": "display",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Trigger a short safe reaction on the companion."
+    },
+    "companion.say": {
+      "method": "companion.say",
+      "group": "display",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Show a short validated companion message."
+    },
+    "companion.agent.set_state": {
+      "method": "companion.agent.set_state",
+      "group": "agent_state",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Set the semantic agent state shown by the companion."
+    },
+    "companion.agent.get_state": {
+      "method": "companion.agent.get_state",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read the current semantic agent state."
+    },
+    "companion.agent.clear_state": {
+      "method": "companion.agent.clear_state",
+      "group": "agent_state",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Clear the current semantic agent state."
+    },
+    "companion.confirm.request": {
+      "method": "companion.confirm.request",
+      "group": "confirmation",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Request a local user confirmation through the control center temporary UI."
+    },
+    "companion.confirm.get": {
+      "method": "companion.confirm.get",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read the current or latest confirmation state."
+    },
+    "companion.confirm.cancel": {
+      "method": "companion.confirm.cancel",
+      "group": "confirmation",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Cancel a pending confirmation request."
+    },
+    "companion.context.summary": {
+      "method": "companion.context.summary",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read a safe companion context summary."
+    },
+    "companion.activity.list": {
+      "method": "companion.activity.list",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read recent in-memory companion activity."
+    },
+    "companion.permissions.summary": {
+      "method": "companion.permissions.summary",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read the current companion permission policy summary."
+    },
+    "companion.plugins.summary": {
+      "method": "companion.plugins.summary",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read the safe declarative plugin runtime summary."
+    },
+    "companion.profile.list": {
+      "method": "companion.profile.list",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "List available pet profiles and readiness."
+    },
+    "companion.profile.capabilities": {
+      "method": "companion.profile.capabilities",
+      "group": "readonly",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Read a safe profile capability manifest."
+    },
+    "companion.profile.select": {
+      "method": "companion.profile.select",
+      "group": "profile_change",
+      "allowed": true,
+      "requiresConfirmation": false,
+      "description": "Select a ready local pet profile."
+    }
+  }
+}

@@ -131,9 +131,14 @@ LAYOUT_PRESETS: dict[str, LayoutPreset] = {
     # Standing-family states are aligned to the current accepted `idle_yawn`
     # runtime body size, not to the full motion union box.
     "idle": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "click_head_happy": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "click_body_confused": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
     "mouse_hover_look": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
     "mouse_shy_loop": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
     "mouse_leave_back": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "drag_start_lift": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.55),
+    "guofeng_drag_hold": LayoutPreset(target_cx=776, target_bottom=1711, target_height=678, min_scale=0.45, max_scale=0.88),
+    "drag_end_dizzy": LayoutPreset(target_cx=771, target_bottom=1752, target_height=752, min_scale=0.45, max_scale=0.88),
     "idle_hair": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.45, max_scale=0.56),
     "idle_yawn": LayoutPreset(target_cx=769, target_bottom=1724, target_height=809, min_scale=0.70, max_scale=0.82),
     "reading": LayoutPreset(target_cx=768, target_bottom=1724, target_height=1560, min_scale=1.03, max_scale=1.08),
@@ -171,6 +176,16 @@ LAYOUT_REFERENCE_PRESETS: dict[str, LayoutReferencePreset] = {
         measurement_box=AlphaBox(540, 60, 1000, 1728),
         source_measurement_box=AlphaBox(180, 40, 520, 1279),
     ),
+    "click_head_happy": LayoutReferencePreset(
+        sample_indices=(0, 1, 2),
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "click_body_confused": LayoutReferencePreset(
+        sample_indices=(0, 1, 2),
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
     "mouse_hover_look": LayoutReferencePreset(
         measurement_box=AlphaBox(540, 60, 1000, 1728),
         source_measurement_box=AlphaBox(180, 40, 520, 1279),
@@ -182,6 +197,21 @@ LAYOUT_REFERENCE_PRESETS: dict[str, LayoutReferencePreset] = {
     "mouse_leave_back": LayoutReferencePreset(
         measurement_box=AlphaBox(540, 60, 1000, 1728),
         source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "drag_start_lift": LayoutReferencePreset(
+        sample_indices=(0, 1, 2),
+        measurement_box=AlphaBox(540, 60, 1000, 1728),
+        source_measurement_box=AlphaBox(180, 40, 520, 1279),
+    ),
+    "drag_hold_lift": LayoutReferencePreset(
+        sample_indices=(0, 1, 2),
+        measurement_box=AlphaBox(180, 80, 1360, 1640),
+        source_measurement_box=AlphaBox(80, 40, 720, 1120),
+    ),
+    "drag_end_dizzy": LayoutReferencePreset(
+        sample_indices=(0, 1, 2),
+        measurement_box=AlphaBox(180, 80, 1360, 1640),
+        source_measurement_box=AlphaBox(80, 40, 640, 1279),
     ),
     "idle_hair": LayoutReferencePreset(
         measurement_box=AlphaBox(540, 60, 1000, 1728),

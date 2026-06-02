@@ -1,4 +1,4 @@
-import type { AgentSemanticStatus } from './agentProtocol';
+import type { AgentSemanticStatus, CompanionProtocolMethod } from './agentProtocol';
 
 export interface CompanionConfig {
   window: {
@@ -61,6 +61,10 @@ export interface PetProfileDefinition {
   assetRoot: string;
   requiredAction: string;
   locked?: boolean;
+  packageRoot?: string;
+  packageManifestPath?: string;
+  profileVersion?: string;
+  source?: 'builtin' | 'installed';
 }
 
 export interface PetProfileSummary {
@@ -72,12 +76,43 @@ export interface PetProfileSummary {
   reason: string | null;
   assetRoot: string;
   requiredAction: string;
+  source: 'builtin' | 'installed';
+  profileVersion: string | null;
+  warnings: string[];
+  removable: boolean;
 }
 
 export interface PetProfileState {
   activeProfileId: string;
   defaultProfileId: string;
   profiles: PetProfileSummary[];
+}
+
+export interface ProfilePackageManifest {
+  schemaVersion: number;
+  profileId: string;
+  profileVersion: string;
+  label: string;
+  description: string;
+  requiredAction: string;
+  entrypoints: {
+    companionConfig: string;
+    statesConfig: string;
+    actionRegistry: string;
+    interactionRules?: string;
+    motionCatalog: string;
+    motionSources: string;
+    profileCapabilityManifest?: string;
+  };
+  assetsRoot: string;
+  qaSummaryPath: string;
+  missingSourceActions: string[];
+  needsReplacementActions: string[];
+  distribution: {
+    publishable: boolean;
+    license: string;
+    provenance: string;
+  };
 }
 
 export interface ProfileCapabilityManifest {
@@ -106,6 +141,7 @@ export interface ProfileCapabilityManifest {
     runtimeReadyActions: string[];
     missingSourceActions: string[];
     blockedByVideoActions: string[];
+    needsReplacementActions: string[];
     videoLedgerPath: string;
     actionProgressPath: string;
   };
@@ -157,6 +193,7 @@ export interface PluginsConfig {
   plugins: {
     codex_plugin?: CodexPluginConfig;
     companion_protocol?: Partial<CompanionProtocolConfig>;
+    declarative_plugins?: Partial<DeclarativePluginsConfig>;
     weather_plugin?: {
       enabled: boolean;
     };
@@ -173,6 +210,7 @@ export interface CodexPluginConfig {
   runtimeStatePath: string;
   pollIntervalMs: number;
   thinkingTimeoutMs: number;
+  waitingAuthTimeoutMs: number;
   successHoldMs: number;
   errorHoldMs: number;
 }
@@ -187,6 +225,87 @@ export interface CompanionProtocolConfig {
   maxTtlMs: number;
 }
 
+export interface DeclarativePluginsConfig {
+  enabled: boolean;
+  builtinDirectory: string;
+  localDirectory: string;
+  toggleStateFile: string;
+  maxPlugins: number;
+  schedulerIntervalMs: number;
+  minIntervalMs: number;
+  minCooldownMs: number;
+  defaultTtlMs: number;
+  maxTtlMs: number;
+}
+
+export interface DeclarativePluginFeedback {
+  id: string;
+  pluginId: string;
+  message: string | null;
+  reaction: string | null;
+  action: string | null;
+  expiresAt: string;
+}
+
+export interface DeclarativePluginFeedbackResult {
+  feedbackId: string;
+  pluginId: string;
+  status: 'accepted' | 'skipped' | 'interrupted';
+  reason: string | null;
+}
+
+export interface DeclarativePluginItemSummary {
+  id: string;
+  version: string;
+  label: string;
+  description: string;
+  source: 'builtin' | 'local';
+  permissions: string[];
+  profileIds: string[];
+  enabledByDefault: boolean;
+  enabled: boolean;
+  lastTriggeredAt: string | null;
+  lastError: string | null;
+}
+
+export interface DeclarativePluginLoadError {
+  source: 'builtin' | 'local';
+  file: string;
+  message: string;
+}
+
+export interface DeclarativePluginSummary {
+  enabled: boolean;
+  pluginCount: number;
+  enabledCount: number;
+  plugins: DeclarativePluginItemSummary[];
+  recentErrors: DeclarativePluginLoadError[];
+}
+
+export type PermissionRiskGroup = 'readonly' | 'display' | 'agent_state' | 'confirmation' | 'profile_change';
+
+export interface PermissionPolicyRule {
+  method: CompanionProtocolMethod;
+  group: PermissionRiskGroup;
+  allowed: boolean;
+  requiresConfirmation: boolean;
+  description: string;
+}
+
+export interface PermissionPolicyConfig {
+  version: number;
+  enabled: boolean;
+  rules: Record<string, PermissionPolicyRule>;
+}
+
+export interface PermissionPolicySummary {
+  enabled: boolean;
+  version: number;
+  groupCounts: Partial<Record<PermissionRiskGroup, number>>;
+  blockedMethods: string[];
+  confirmationRequiredMethods: string[];
+}
+
 export interface CompanionAPI {
   getCompanionConfig: () => Promise<CompanionConfig>;
   getStatesConfig: () => Promise<StatesConfig>;
@@ -194,6 +313,12 @@ export interface CompanionAPI {
   getInteractionRulesConfig: () => Promise<InteractionRulesConfig>;
   getPetProfiles: () => Promise<PetProfileState>;
   setPetProfile: (profileId: string) => Promise<PetProfileState>;
+  importPetProfile: () => Promise<PetProfileState>;
+  removePetProfile: (profileId: string) => Promise<PetProfileState>;
+  getDeclarativePlugins: () => Promise<DeclarativePluginSummary>;
+  setDeclarativePluginEnabled: (pluginId: string, enabled: boolean) => Promise<DeclarativePluginSummary>;
+  refreshDeclarativePlugins: () => Promise<DeclarativePluginSummary>;
+  reportDeclarativePluginFeedback: (result: DeclarativePluginFeedbackResult) => void;
   assetUrl: (relativePath: string) => string;
   getCodexRuntimeState: () => Promise<CodexRenderState | null>;
   getAgentRuntimeState: () => Promise<AgentRenderState | null>;
@@ -217,6 +342,7 @@ export interface CompanionAPI {
   setMouseMode: (mode: MouseMode) => Promise<WindowControls>;
   setMouseHitTest: (canInteract: boolean) => Promise<boolean>;
   setMouseHitRegions: (regions: MouseHitRegion[]) => Promise<void>;
+  setNativeClickCapture: (enabled: boolean) => Promise<void>;
   setWindowDragActive: (active: boolean) => Promise<void>;
   moveWindowBy: (deltaX: number, deltaY: number) => Promise<void>;
   setMousePassthrough: (enabled: boolean) => Promise<boolean>;
@@ -236,6 +362,7 @@ export interface CompanionAPI {
   onControlCenterModule: (callback: (module: ControlCenterModule) => void) => () => void;
   onShortcutsUpdated: (callback: (shortcuts: ShortcutBinding[]) => void) => () => void;
   onInputPermissionStatus: (callback: (status: InputPermissionStatus) => void) => () => void;
+  onInteractionClick: (callback: (point: MouseHitTestPoint) => void) => () => void;
   onInteractionDragActive: (callback: (active: boolean) => void) => () => void;
   onCodexRuntimeState: (callback: (state: CodexRenderState | null) => void) => () => void;
   onAgentRuntimeState: (callback: (state: AgentRenderState | null) => void) => () => void;
@@ -245,6 +372,8 @@ export interface CompanionAPI {
   onRemindersUpdated: (callback: (reminders: ReminderRecord[]) => void) => () => void;
   onTaskNotification: (callback: (state: TaskNotification | null) => void) => () => void;
   onTasksUpdated: (callback: (tasks: TaskCenterSnapshot) => void) => () => void;
+  onDeclarativePluginFeedback: (callback: (feedback: DeclarativePluginFeedback) => void) => () => void;
+  onDeclarativePluginsUpdated: (callback: (summary: DeclarativePluginSummary) => void) => () => void;
 }
 
 export type InteractionEventName =
@@ -271,6 +400,10 @@ export interface InteractionRulesConfig {
   version: number;
   enabled: boolean;
   rules: Partial<Record<InteractionEventName, InteractionRule>>;
+  hitZones?: {
+    clickHeadMaxYRatio?: number;
+    clickPaddingPx?: number;
+  };
   guards?: {
     sleep?: {
       allow?: InteractionEventName[];
@@ -377,6 +510,7 @@ export interface CompanionProtocolStatus {
   methods: string[];
   agentState: AgentRenderState | null;
   confirmation: AgentConfirmation | null;
+  permissionPolicy: PermissionPolicySummary;
   lastError: string | null;
 }
 
@@ -476,7 +610,7 @@ export interface WindowControls {
 
 export type MouseMode = 'smart' | 'interactive';
 
-export type ControlCenterModule = 'status' | 'integrations' | 'tasks' | 'reminders' | 'settings';
+export type ControlCenterModule = 'status' | 'integrations' | 'plugins' | 'tasks' | 'reminders' | 'settings';
 
 export type InputPermissionStatus = 'granted' | 'denied' | 'unknown';
 

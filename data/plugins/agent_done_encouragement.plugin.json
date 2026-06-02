@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "agent_done_encouragement",
+  "version": "1.0.0",
+  "label": "任务完成鼓励",
+  "description": "Agent 进入 done 状态时，播放一条轻量成功反馈。",
+  "enabledByDefault": false,
+  "permissions": [
+    "display.reaction"
+  ],
+  "cooldownMs": 15000,
+  "triggers": [
+    {
+      "type": "condition",
+      "source": "agent.status",
+      "equals": "done"
+    }
+  ],
+  "effects": [
+    {
+      "type": "reaction_pool",
+      "reactions": [
+        "success"
+      ],
+      "ttlMs": 5000
+    }
+  ]
+}

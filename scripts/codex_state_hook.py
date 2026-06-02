@@ -151,7 +151,8 @@ def build_state(args: argparse.Namespace, payload: dict[str, Any]) -> dict[str, 
             expires_at = expires_at_iso(args.error_hold_ms)
     elif event_key == "permissionrequest":
         state = "waiting_auth"
-        message = "需要你确认一下"
+        message = "请在 Codex 中确认授权"
+        expires_at = expires_at_iso(args.waiting_auth_hold_ms)
     elif event_key == "stop":
         state = "success"
         message = "完成啦"
@@ -196,6 +197,7 @@ def main() -> int:
     )
     parser.add_argument("--success-hold-ms", type=int, default=4000)
     parser.add_argument("--error-hold-ms", type=int, default=8000)
+    parser.add_argument("--waiting-auth-hold-ms", type=int, default=60000)
     args = parser.parse_args()
 
     raw = os.sys.stdin.read().strip()

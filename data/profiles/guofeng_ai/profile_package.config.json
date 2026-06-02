@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "profileId": "guofeng_ai",
+  "profileVersion": "1.3.0",
+  "label": "古风 AI 角色",
+  "description": "古风 AI 角色本地角色包，已启用 hover、click 与 drag 交互。",
+  "requiredAction": "idle",
+  "entrypoints": {
+    "companionConfig": "data/profiles/guofeng_ai/companion.config.json",
+    "statesConfig": "data/profiles/guofeng_ai/states.config.json",
+    "actionRegistry": "data/profiles/guofeng_ai/action_registry.config.json",
+    "interactionRules": "data/profiles/guofeng_ai/interaction_rules.config.json",
+    "motionCatalog": "data/profiles/guofeng_ai/motion_catalog.config.json",
+    "motionSources": "data/profiles/guofeng_ai/motion_sources.config.json",
+    "profileCapabilityManifest": "data/profiles/guofeng_ai/profile_manifest.config.json"
+  },
+  "assetsRoot": "assets/profiles/guofeng_ai/actions",
+  "qaSummaryPath": "qa-summary.json",
+  "missingSourceActions": [
+    "reading",
+    "success",
+    "error",
+    "reminder",
+    "duck_sit_head_hair",
+    "duck_sit_finger_lip",
+    "duck_sit_stretch",
+    "stand_to_duck_sit",
+    "duck_sit_to_stand",
+    "duck_sit_to_sleep",
+    "sleep_to_stand",
+    "idle_yawn",
+    "idle_hair",
+    "stand_to_reading",
+    "reading_to_stand",
+    "stand_to_coding",
+    "coding_to_stand",
+    "stand_to_thinking",
+    "thinking_to_stand"
+  ],
+  "needsReplacementActions": [
+    "mouse_leave_back"
+  ],
+  "distribution": {
+    "publishable": false,
+    "license": "TBD",
+    "provenance": "mixed generated/local source videos; publish provenance not finalized"
+  }
+}

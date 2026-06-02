@@ -13206,7 +13206,6 @@ const STAND_TO_DUCK_SIT = "stand_to_duck_sit";
 const DUCK_SIT_TO_STAND = "duck_sit_to_stand";
 const DUCK_SIT_TO_SLEEP = "duck_sit_to_sleep";
 const WAKE_FROM_SLEEP_TRANSITION = "sleep_to_stand";
-const DRAG_START_EVENT = "drag_start";
 const DRAG_HOLD_EVENT = "drag_hold";
 const DRAG_END_EVENT = "drag_end";
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
@@ -13221,6 +13220,7 @@ const EMPTY_TASK_SNAPSHOT = {
 const MODULE_LABELS = {
   status: "状态",
   integrations: "AI 接入",
+  plugins: "插件",
   tasks: "任务",
   reminders: "提醒",
   settings: "设置"
@@ -13230,6 +13230,16 @@ const RUNTIME_SOURCE_PRIORITY = {
   task: 0,
   agent: 1,
   codex: 2
+};
+const PLUGIN_REACTION_TO_STATE = {
+  idle: "idle",
+  reset: "idle",
+  thinking: "thinking",
+  editing: "coding",
+  coding: "coding",
+  waiting: "reminder",
+  success: "success",
+  error: "error"
 };
 function isCompanionState(state) {
   return RENDER_STATES.includes(state);
@@ -13357,6 +13367,26 @@ function interactionAction(rules, eventName) {
   }
   return rules.rules[eventName]?.action ?? null;
 }
+function unionHitRegionBounds(regions) {
+  if (regions.length === 0) {
+    return null;
+  }
+  const left = Math.min(...regions.map((region) => region.x));
+  const top = Math.min(...regions.map((region) => region.y));
+  const right = Math.max(...regions.map((region) => region.x + region.width));
+  const bottom = Math.max(...regions.map((region) => region.y + region.height));
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top)
+  };
+}
+function pointInHitRegions(x, y, regions, padding = 0) {
+  return regions.some(
+    (region) => x >= region.x - padding && x <= region.x + region.width + padding && y >= region.y - padding && y <= region.y + region.height + padding
+  );
+}
 function canInterruptRuntime(rule, runtimeOverride) {
   if (!rule) {
     return false;
@@ -13380,7 +13410,7 @@ function renderedStateForMotion(folder, desiredState) {
 }
 function moduleFromSearch() {
   const module = new URLSearchParams(window.location.search).get("module");
-  return module === "tasks" || module === "reminders" || module === "settings" || module === "integrations" || module === "status" ? module : "status";
+  return module === "tasks" || module === "reminders" || module === "settings" || module === "integrations" || module === "plugins" || module === "status" ? module : "status";
 }
 function useCompanionCatalog(companionConfig, statesConfig, actionRegistry) {
   const keyframes = reactExports.useMemo(() => {
@@ -13451,6 +13481,7 @@ function PetRenderer({
   agentState,
   reminderState,
   taskNotification,
+  pluginFeedback,
   interactionDragActive,
   interactionRules,
   keyframes,
@@ -13459,13 +13490,16 @@ function PetRenderer({
 }) {
   const [idleMotionFolder, setIdleMotionFolder] = reactExports.useState(null);
   const [interactionMotionFolder, setInteractionMotionFolder] = reactExports.useState(null);
+  const [activePluginFeedback, setActivePluginFeedback] = reactExports.useState(null);
   const [idlePosture, setIdlePosture] = reactExports.useState("standing");
   const [autoSleep, setAutoSleep] = reactExports.useState(false);
   const idleMotionTimerRef = reactExports.useRef(null);
   const motionQueueRef = reactExports.useRef([]);
+  const hitRegionsRef = reactExports.useRef([]);
   const previousDesiredStateRef = reactExports.useRef(null);
   const previousDragActiveRef = reactExports.useRef(false);
   const pointerInsideRef = reactExports.useRef(false);
+  const lastNativeClickAtRef = reactExports.useRef(0);
   const interactionCooldownsRef = reactExports.useRef({});
   const clearIdleMotionTimer = reactExports.useCallback(() => {
     if (idleMotionTimerRef.current !== null) {
@@ -13509,10 +13543,67 @@ function PetRenderer({
   const runtimeOverride = runtimeCandidates.sort(
     (left, right) => RUNTIME_SOURCE_PRIORITY[left.source] - RUNTIME_SOURCE_PRIORITY[right.source] || statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
   )[0] ?? null;
+  const reportPluginFeedback = reactExports.useCallback(
+    (feedback, status, reason) => {
+      window.companionAPI.reportDeclarativePluginFeedback({
+        feedbackId: feedback.id,
+        pluginId: feedback.pluginId,
+        status,
+        reason
+      });
+    },
+    []
+  );
+  const clearPluginFeedback = reactExports.useCallback(
+    (reason) => {
+      setActivePluginFeedback((current) => {
+        if (current) {
+          reportPluginFeedback(current, "interrupted", reason);
+        }
+        return null;
+      });
+    },
+    [reportPluginFeedback]
+  );
+  reactExports.useEffect(() => {
+    if (!pluginFeedback) {
+      return void 0;
+    }
+    const skipReason = runtimeOverride ? "runtime_override" : interactionDragActive ? "user_drag_active" : interactionMotionFolder || pointerInsideRef.current ? "user_interaction_active" : pluginFeedback.action && !catalog.byFolder.has(pluginFeedback.action) ? "action_unavailable" : null;
+    if (skipReason) {
+      reportPluginFeedback(pluginFeedback, "skipped", skipReason);
+      return void 0;
+    }
+    clearIdleMotionTimer();
+    clearMotionSequence();
+    setActivePluginFeedback(pluginFeedback);
+    reportPluginFeedback(pluginFeedback, "accepted", null);
+    const delayMs = Math.max(0, Date.parse(pluginFeedback.expiresAt) - Date.now());
+    const timer = window.setTimeout(() => {
+      setActivePluginFeedback((current) => current?.id === pluginFeedback.id ? null : current);
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [
+    catalog,
+    clearIdleMotionTimer,
+    clearMotionSequence,
+    interactionDragActive,
+    interactionMotionFolder,
+    pluginFeedback,
+    reportPluginFeedback,
+    runtimeOverride
+  ]);
+  reactExports.useEffect(() => {
+    if (runtimeOverride && activePluginFeedback) {
+      clearPluginFeedback("runtime_override");
+    }
+  }, [activePluginFeedback, clearPluginFeedback, runtimeOverride]);
+  const pluginOverride = !runtimeOverride && !interactionDragActive && !interactionMotionFolder ? activePluginFeedback : null;
+  const pluginReactionState = pluginOverride?.reaction ? PLUGIN_REACTION_TO_STATE[pluginOverride.reaction] : void 0;
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
   const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
-  const exactManualFolder = !runtimeOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
-  const canAutoSleep = !runtimeOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
+  const exactManualFolder = !runtimeOverride && !pluginOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
+  const canAutoSleep = !runtimeOverride && !pluginOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
   reactExports.useEffect(() => {
     if (!canAutoSleep) {
       setAutoSleep(false);
@@ -13523,17 +13614,18 @@ function PetRenderer({
     }, AUTO_SLEEP_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [canAutoSleep, selection.state, selection.variant]);
-  const desiredState = runtimeOverride?.state ?? (autoSleep ? "sleep" : selection.state);
-  const renderedState = exactManualFolder ? renderedStateForMotion(exactManualFolder, desiredState) : renderedStateForMotion(idleMotionFolder, desiredState);
-  const canPlayIdleMotion = desiredState === "idle" && !runtimeOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
+  const desiredState = runtimeOverride?.state ?? pluginReactionState ?? (autoSleep ? "sleep" : selection.state);
+  const renderedState = pluginOverride?.action ? renderedStateForMotion(pluginOverride.action, desiredState) : exactManualFolder ? renderedStateForMotion(exactManualFolder, desiredState) : renderedStateForMotion(idleMotionFolder, desiredState);
+  const canPlayIdleMotion = desiredState === "idle" && !runtimeOverride && !pluginOverride && selection.state === "idle" && !selection.variant && !exactManualFolder;
   const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === "idle" ? selection.variant : null;
   const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : void 0;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : void 0;
+  const pluginActionKeyframe = pluginOverride?.action ? catalog.byFolder.get(pluginOverride.action) : void 0;
   const dragHoldAction = interactionAction(interactionRules, DRAG_HOLD_EVENT);
   const interactionMotionKeyframe = !runtimeOverride && interactionMotionFolder ? catalog.byFolder.get(interactionMotionFolder) : void 0;
   const interactionDragKeyframe = interactionDragActive && dragHoldAction ? catalog.byFolder.get(dragHoldAction) : void 0;
   const postureIdleKeyframe = !idleMotionFolder && renderedState === "idle" && !renderedVariant && idlePosture === "duck_sit" ? catalog.byFolder.get(DUCK_SIT_IDLE) : void 0;
-  const activeKeyframe = interactionMotionKeyframe ?? interactionDragKeyframe ?? manualActionKeyframe ?? activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
+  const activeKeyframe = interactionDragKeyframe ?? interactionMotionKeyframe ?? pluginActionKeyframe ?? manualActionKeyframe ?? activeMotionKeyframe ?? (renderedState === "idle" && renderedVariant ? catalog.byFolder.get(renderedVariant) : void 0) ?? postureIdleKeyframe ?? catalog.byState.get(renderedState) ?? catalog.byState.get("idle") ?? keyframes[0];
   const activeMotionDurationMs = activeKeyframe?.motion.durationMs ?? 0;
   reactExports.useEffect(() => {
     if (!interactionMotionKeyframe && !interactionDragKeyframe) {
@@ -13552,8 +13644,17 @@ function PetRenderer({
       if (!canInterruptRuntime(rule, runtimeOverride)) {
         return false;
       }
-      if (interactionMotionFolder && rule.interruptLevel !== "high" && eventName !== "mouse_leave") {
-        return false;
+      if (interactionMotionFolder) {
+        const hoverRule = interactionRules?.rules.mouse_hover;
+        const isHoverMotion = interactionMotionFolder === hoverRule?.action || interactionMotionFolder === hoverRule?.holdAction;
+        const isClickEvent = eventName === "click_head" || eventName === "click_body";
+        if (isClickEvent && isHoverMotion) {
+          setInteractionMotionFolder(null);
+        } else if (eventName === "mouse_leave" && !isHoverMotion) {
+          return false;
+        } else if (rule.interruptLevel !== "high" && eventName !== "mouse_leave") {
+          return false;
+        }
       }
       const now = Date.now();
       const lastAt = interactionCooldownsRef.current[eventName] ?? 0;
@@ -13561,6 +13662,7 @@ function PetRenderer({
         return false;
       }
       interactionCooldownsRef.current[eventName] = now;
+      clearPluginFeedback(`user_${eventName}`);
       clearIdleMotionTimer();
       clearMotionSequence();
       setInteractionMotionFolder(action);
@@ -13568,6 +13670,7 @@ function PetRenderer({
     },
     [
       catalog,
+      clearPluginFeedback,
       clearIdleMotionTimer,
       clearMotionSequence,
       interactionMotionFolder,
@@ -13579,7 +13682,10 @@ function PetRenderer({
     const wasDragging = previousDragActiveRef.current;
     previousDragActiveRef.current = interactionDragActive;
     if (interactionDragActive && !wasDragging) {
-      startInteractionMotion(DRAG_START_EVENT);
+      clearPluginFeedback("user_drag_active");
+      clearIdleMotionTimer();
+      clearMotionSequence();
+      setInteractionMotionFolder(null);
       return;
     }
     if (!interactionDragActive && wasDragging) {
@@ -13587,7 +13693,7 @@ function PetRenderer({
         setInteractionMotionFolder(null);
       }
     }
-  }, [interactionDragActive, startInteractionMotion]);
+  }, [clearIdleMotionTimer, clearMotionSequence, clearPluginFeedback, interactionDragActive, startInteractionMotion]);
   reactExports.useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
     if (desiredState === "sleep") {
@@ -13690,24 +13796,71 @@ function PetRenderer({
     }
     setIdleMotionFolder(null);
   }, [catalog, idleMotionFolder, interactionMotionFolder, interactionRules, runtimeOverride]);
+  const triggerClickAt = reactExports.useCallback(
+    (point) => {
+      const regions = hitRegionsRef.current;
+      const clickPaddingPx = interactionRules?.hitZones?.clickPaddingPx ?? 0;
+      if (regions.length === 0 || !pointInHitRegions(point.x, point.y, regions, clickPaddingPx)) {
+        return false;
+      }
+      const bounds = unionHitRegionBounds(regions);
+      if (!bounds) {
+        return false;
+      }
+      const localY = point.y - bounds.y;
+      if (localY < 0 || localY > bounds.height) {
+        return false;
+      }
+      const clickHeadMaxYRatio = interactionRules?.hitZones?.clickHeadMaxYRatio ?? 0.38;
+      return startInteractionMotion(localY / bounds.height <= clickHeadMaxYRatio ? "click_head" : "click_body");
+    },
+    [interactionRules, startInteractionMotion]
+  );
+  reactExports.useEffect(
+    () => window.companionAPI.onInteractionClick((point) => {
+      lastNativeClickAtRef.current = Date.now();
+      triggerClickAt(point);
+    }),
+    [triggerClickAt]
+  );
   if (!activeKeyframe) {
     return null;
   }
-  const bubbleMessage = runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : runtimeBubbleMessage(
+  const bubbleMessage = pluginOverride?.message ?? (runtimeOverride?.source === "reminder" && reminderOverride ? reminderOverride.message : runtimeOverride?.source === "task" && taskOverride ? taskOverride.message : runtimeBubbleMessage(
     runtimeOverride?.source === "agent" ? agentOverride : null,
     runtimeOverride?.source === "codex" ? codexOverride : null,
     renderedState
-  );
+  ));
   const handlePointerEnter = reactExports.useCallback(() => {
     pointerInsideRef.current = true;
+    clearPluginFeedback("user_hover");
     startInteractionMotion("mouse_hover");
-  }, [startInteractionMotion]);
+  }, [clearPluginFeedback, startInteractionMotion]);
   const handlePointerLeave = reactExports.useCallback(() => {
     pointerInsideRef.current = false;
     if (!startInteractionMotion("mouse_leave")) {
       setInteractionMotionFolder(null);
     }
   }, [startInteractionMotion]);
+  const handlePointerDown = reactExports.useCallback(
+    (event) => {
+      if (event.button !== 0 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || interactionDragActive || Date.now() - lastNativeClickAtRef.current < 250) {
+        return;
+      }
+      triggerClickAt({ x: event.clientX, y: event.clientY });
+    },
+    [interactionDragActive, triggerClickAt]
+  );
+  const handleHitRegionsChange = reactExports.useCallback(
+    (regions) => {
+      if (regions.length === 0 && hitRegionsRef.current.length > 0) {
+        return;
+      }
+      hitRegionsRef.current = regions;
+      onHitRegionsChange(regions);
+    },
+    [onHitRegionsChange]
+  );
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("main", { className: "companion-shell", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
@@ -13715,6 +13868,7 @@ function PetRenderer({
         className: "companion-stage",
         onPointerEnter: handlePointerEnter,
         onPointerLeave: handlePointerLeave,
+        onPointerDown: handlePointerDown,
         children: /* @__PURE__ */ jsxRuntimeExports.jsx(
           Companion,
           {
@@ -13722,10 +13876,10 @@ function PetRenderer({
             canvas: companionConfig.renderer.keyframeCanvas,
             state: renderedState,
             onHitTesterChange: () => void 0,
-            onHitRegionsChange,
+            onHitRegionsChange: handleHitRegionsChange,
             onMotionComplete: handleMotionComplete
           },
-          `${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? "dragging" : selection.replayId ?? 0}`
+          `${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? "dragging" : pluginOverride?.id ?? selection.replayId ?? 0}`
         )
       }
     ),
@@ -13739,6 +13893,7 @@ function PetApp() {
   const [interactionRules, setInteractionRules] = reactExports.useState(null);
   const [manualSelection, setManualSelection] = reactExports.useState(null);
   const [interactionDragActive, setInteractionDragActive] = reactExports.useState(false);
+  const [pluginFeedback, setPluginFeedback] = reactExports.useState(null);
   const { codexState, agentState, reminderState, taskNotification } = useRuntimeState();
   const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
   const loadPetConfig = reactExports.useCallback(async () => {
@@ -13768,8 +13923,23 @@ function PetApp() {
   }, [loadPetConfig]);
   reactExports.useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
   reactExports.useEffect(() => window.companionAPI.onInteractionDragActive(setInteractionDragActive), []);
+  reactExports.useEffect(() => window.companionAPI.onDeclarativePluginFeedback(setPluginFeedback), []);
+  const nativeClickCaptureEnabled = Boolean(
+    interactionRules?.enabled && interactionRules.rules.click_head?.action && interactionRules.rules.click_body?.action
+  );
+  reactExports.useEffect(() => {
+    window.companionAPI.setNativeClickCapture(nativeClickCaptureEnabled).catch((error) => {
+      console.error("Failed to update native click capture", error);
+    });
+    return () => {
+      window.companionAPI.setNativeClickCapture(false).catch((error) => {
+        console.error("Failed to disable native click capture", error);
+      });
+    };
+  }, [nativeClickCaptureEnabled]);
   reactExports.useEffect(
     () => window.companionAPI.onPetProfileChanged(() => {
+      setInteractionRules(null);
       loadPetConfig().catch((error) => console.error("Failed to reload pet profile", error));
     }),
     [loadPetConfig]
@@ -13792,6 +13962,7 @@ function PetApp() {
       agentState,
       reminderState,
       taskNotification,
+      pluginFeedback,
       interactionDragActive,
       interactionRules,
       keyframes,
@@ -13805,6 +13976,8 @@ function SettingsModule({
   permissionStatus,
   petProfiles,
   onSelectPetProfile,
+  onImportPetProfile,
+  onRemovePetProfile,
   onUpdateShortcut,
   onResetShortcut
 }) {
@@ -13828,6 +14001,22 @@ function SettingsModule({
       setError(resetError instanceof Error ? resetError.message : "快捷键重置失败");
     }
   }
+  async function importPetProfile() {
+    setError(null);
+    try {
+      await onImportPetProfile();
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : "角色包导入失败");
+    }
+  }
+  async function removePetProfile(profileId) {
+    setError(null);
+    try {
+      await onRemovePetProfile(profileId);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : "角色包移除失败");
+    }
+  }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "settings-module", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "control-module__header", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "PA7" }),
@@ -13840,21 +14029,43 @@ function SettingsModule({
     ] }),
     error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: error }) : null,
     petProfiles ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "profile-card", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "桌宠形象" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "profile-list", children: petProfiles.profiles.map((profile) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          className: profile.selected ? "profile-option profile-option--active" : "profile-option",
-          disabled: profile.selected || !profile.ready,
-          type: "button",
-          onClick: () => onSelectPetProfile(profile.id),
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "profile-option__label", children: profile.label }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "profile-option__meta", children: profile.ready ? profile.selected ? "使用中" : "可切换" : profile.reason })
-          ]
-        },
-        profile.id
-      )) })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "profile-card__header", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "桌宠形象" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "本地角色包可导入；缺非核心视频时保留 warning。" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "mini-button mini-button--primary", type: "button", onClick: importPetProfile, children: "导入" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "profile-list", children: petProfiles.profiles.map((profile) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "profile-option-row", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            className: profile.selected ? "profile-option profile-option--active" : "profile-option",
+            disabled: profile.selected || !profile.ready,
+            type: "button",
+            onClick: () => onSelectPetProfile(profile.id),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "profile-option__label", children: profile.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "profile-option__meta", children: [
+                profile.source === "installed" ? `本地包 ${profile.profileVersion ?? ""}` : "内置角色",
+                " · ",
+                profile.ready ? profile.selected ? "使用中" : "可切换" : profile.reason
+              ] }),
+              profile.warnings.map((warning) => /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "profile-option__warning", children: warning }, warning))
+            ]
+          }
+        ),
+        profile.removable ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            "aria-label": `移除 ${profile.label}`,
+            className: "mini-button profile-remove-button",
+            type: "button",
+            onClick: () => removePetProfile(profile.id),
+            children: "移除"
+          }
+        ) : null
+      ] }, profile.id)) })
     ] }) : null,
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "shortcut-list", children: shortcuts.map((shortcut) => /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "shortcut-item", onSubmit: (event) => submitShortcut(event, shortcut), children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -13943,12 +14154,26 @@ function IntegrationsModule({
           agentState?.expiresAt ? new Date(agentState.expiresAt).toLocaleTimeString() : "-"
         ] })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-facts", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Policy ",
+          protocolStatus?.permissionPolicy.enabled ? "on" : "-"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Blocked ",
+          protocolStatus?.permissionPolicy.blockedMethods.length ?? 0
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Confirm ",
+          protocolStatus?.permissionPolicy.confirmationRequiredMethods.length ?? 0
+        ] })
+      ] }),
       protocolStatus?.lastError ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: protocolStatus.lastError }) : null
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-card", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "MCP stdio" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: mcpCommand }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_profile_list / companion_profile_capabilities / companion_profile_select" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_permissions_summary / companion_plugins_summary / companion_profile_list / companion_profile_capabilities / companion_profile_select" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: activeConfirmation?.status === "pending" ? "integration-card integration-card--attention" : "integration-card", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "确认请求" }),
@@ -13986,6 +14211,98 @@ function IntegrationsModule({
     ] })
   ] });
 }
+function PluginsModule({
+  summary,
+  onToggle,
+  onRefresh
+}) {
+  const [error, setError] = reactExports.useState(null);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "settings-module", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "control-module__header plugin-module__header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "status-panel__eyebrow", children: "V1.4" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "status-panel__title", children: "声明式插件" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "mini-button mini-button--primary",
+          type: "button",
+          onClick: () => {
+            setError(null);
+            onRefresh().catch((refreshError) => {
+              setError(refreshError instanceof Error ? refreshError.message : "插件刷新失败");
+            });
+          },
+          children: "刷新"
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: summary?.enabled ? "integration-card integration-card--active" : "integration-card", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "Declarative Plugin Runtime" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__meta", children: [
+        summary?.enabled ? "已启用" : "未启用",
+        " · 已加载 ",
+        summary?.pluginCount ?? 0,
+        " · 已开启 ",
+        summary?.enabledCount ?? 0
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: "只扫描本地 JSON manifest；不执行脚本，不发起网络请求，不写入插件文件。" })
+    ] }),
+    error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: error }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "plugin-list", children: (summary?.plugins ?? []).map((plugin) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: plugin.enabled ? "plugin-card plugin-card--active" : "plugin-card", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "plugin-card__header", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: plugin.label }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__meta", children: [
+            plugin.id,
+            " · ",
+            plugin.source === "builtin" ? "内置" : "本地",
+            " · v",
+            plugin.version
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: plugin.enabled ? "mini-button mini-button--primary" : "mini-button",
+            type: "button",
+            onClick: () => {
+              setError(null);
+              onToggle(plugin.id, !plugin.enabled).catch((toggleError) => {
+                setError(toggleError instanceof Error ? toggleError.message : "插件开关失败");
+              });
+            },
+            children: plugin.enabled ? "关闭" : "开启"
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__meta", children: plugin.description }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-facts", children: [
+        plugin.permissions.map((permission) => /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: permission }, permission)),
+        plugin.profileIds.map((profileId) => /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "profile:",
+          profileId
+        ] }, profileId))
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__meta", children: [
+        "最近触发 ",
+        plugin.lastTriggeredAt ? new Date(plugin.lastTriggeredAt).toLocaleTimeString() : "-"
+      ] }),
+      plugin.lastError ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__error", children: plugin.lastError }) : null
+    ] }, plugin.id)) }),
+    (summary?.recentErrors ?? []).length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "integration-card integration-card--attention", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "settings-module__title", children: "最近加载错误" }),
+      summary?.recentErrors.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "settings-module__error", children: [
+        item.source,
+        ":",
+        item.file,
+        " · ",
+        item.message
+      ] }, `${item.source}:${item.file}:${item.message}`))
+    ] }) : null
+  ] });
+}
 function ControlCenterApp() {
   const [companionConfig, setCompanionConfig] = reactExports.useState(null);
   const [statesConfig, setStatesConfig] = reactExports.useState(null);
@@ -13998,6 +14315,7 @@ function ControlCenterApp() {
   const [petProfiles, setPetProfiles] = reactExports.useState(null);
   const [protocolStatus, setProtocolStatus] = reactExports.useState(null);
   const [agentConfirmation, setAgentConfirmation] = reactExports.useState(null);
+  const [declarativePlugins, setDeclarativePlugins] = reactExports.useState(null);
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
   const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
   const loadControlCenter = reactExports.useCallback(async () => {
@@ -14011,7 +14329,8 @@ function ControlCenterApp() {
       nextPermissionStatus,
       nextPetProfiles,
       nextProtocolStatus,
-      nextAgentConfirmation
+      nextAgentConfirmation,
+      nextDeclarativePlugins
     ] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
@@ -14022,7 +14341,8 @@ function ControlCenterApp() {
       window.companionAPI.getInputPermissionStatus(),
       window.companionAPI.getPetProfiles(),
       window.companionAPI.getCompanionProtocolStatus(),
-      window.companionAPI.getAgentConfirmation()
+      window.companionAPI.getAgentConfirmation(),
+      window.companionAPI.getDeclarativePlugins()
     ]);
     setCompanionConfig(nextCompanionConfig);
     setStatesConfig(nextStatesConfig);
@@ -14034,6 +14354,7 @@ function ControlCenterApp() {
     setPetProfiles(nextPetProfiles);
     setProtocolStatus(nextProtocolStatus);
     setAgentConfirmation(nextAgentConfirmation);
+    setDeclarativePlugins(nextDeclarativePlugins);
   }, []);
   reactExports.useEffect(() => {
     let cancelled = false;
@@ -14059,6 +14380,7 @@ function ControlCenterApp() {
   reactExports.useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
   reactExports.useEffect(() => window.companionAPI.onCompanionProtocolStatus(setProtocolStatus), []);
   reactExports.useEffect(() => window.companionAPI.onAgentConfirmation(setAgentConfirmation), []);
+  reactExports.useEffect(() => window.companionAPI.onDeclarativePluginsUpdated(setDeclarativePlugins), []);
   const respondAgentConfirmation = reactExports.useCallback(async (requestId, action) => {
     setAgentConfirmation(await window.companionAPI.respondAgentConfirmation(requestId, action));
     setProtocolStatus(await window.companionAPI.getCompanionProtocolStatus());
@@ -14077,6 +14399,18 @@ function ControlCenterApp() {
   }, []);
   const updatePetProfile = reactExports.useCallback((profileId) => {
     window.companionAPI.setPetProfile(profileId).then(setPetProfiles).catch((error) => console.error("Failed to update pet profile", error));
+  }, []);
+  const importPetProfile = reactExports.useCallback(async () => {
+    setPetProfiles(await window.companionAPI.importPetProfile());
+  }, []);
+  const removePetProfile = reactExports.useCallback(async (profileId) => {
+    setPetProfiles(await window.companionAPI.removePetProfile(profileId));
+  }, []);
+  const toggleDeclarativePlugin = reactExports.useCallback(async (pluginId, enabled) => {
+    setDeclarativePlugins(await window.companionAPI.setDeclarativePluginEnabled(pluginId, enabled));
+  }, []);
+  const refreshDeclarativePlugins = reactExports.useCallback(async () => {
+    setDeclarativePlugins(await window.companionAPI.refreshDeclarativePlugins());
   }, []);
   const createReminder = reactExports.useCallback(
     async (input) => {
@@ -14227,6 +14561,14 @@ function ControlCenterApp() {
           protocolStatus
         }
       ) : null,
+      activeModule === "plugins" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        PluginsModule,
+        {
+          summary: declarativePlugins,
+          onToggle: toggleDeclarativePlugin,
+          onRefresh: refreshDeclarativePlugins
+        }
+      ) : null,
       activeModule === "settings" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
         SettingsModule,
         {
@@ -14234,6 +14576,8 @@ function ControlCenterApp() {
           permissionStatus,
           petProfiles,
           onSelectPetProfile: updatePetProfile,
+          onImportPetProfile: importPetProfile,
+          onRemovePetProfile: removePetProfile,
           onUpdateShortcut: updateShortcut,
           onResetShortcut: resetShortcut
         }

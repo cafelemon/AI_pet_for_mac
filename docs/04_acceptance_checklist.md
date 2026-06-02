@@ -1,6 +1,6 @@
 # Acceptance Checklist
 
-更新时间：2026-05-30
+更新时间：2026-06-01
 
 ## V1.0.0 文档冻结验收
 
@@ -21,6 +21,8 @@
 ```bash
 npm run typecheck
 npm run agent:contract
+npm run profile:contract
+npm run plugin:contract
 npm run build
 python3 scripts/verify_action_registry_runtime.py
 python3 scripts/asset_check.py --strict --webm-strict
@@ -77,7 +79,7 @@ npm run motion:progress
 ## V1.1.4 MCP 能力蓝图验收
 
 - [x] `V1.1.4` 不改变当时的 package/runtime 版本。
-- [x] click/drag 缺素材动作继续保留为 `V1.2.0` 待补项。
+- [x] 当时 click/drag 缺素材动作继续保留为 `V1.2.0` 待补项；当前已在 `V1.2.0` 补齐。
 - [x] `docs/09_mcp_capability_blueprint.md` 明确 L1-L5 能力分层。
 - [x] 蓝图只记录候选方法，不承诺当前可调用。
 - [x] 蓝图明确不新增远程 HTTP、不引入 MCP SDK、不改变既有 Codex MCP 链路。
@@ -119,21 +121,82 @@ npm run motion:progress
 - [x] 新增 `companion_profile_capabilities` MCP tool。
 - [x] `context.summary` 增加安全的 `profileCapabilitiesSummary`。
 - [x] `guofeng_ai` manifest 标记鼠标害羞链路和 `drag_hold_lift` 已 ready。
-- [x] `guofeng_ai` manifest 标记 `click_head_happy/click_body_confused/drag_start_lift/drag_end_dizzy` 缺 source 且 video blocked。
+- [x] `guofeng_ai` manifest 在 `V1.1.8` 曾标记 click/drag 缺 source；`V1.2.0` 已移出 video blocked。
 - [x] `legacy_real` 使用保守能力声明，不误报古风交互能力。
 - [x] 文档明确 L4 `companion.events.subscribe` 尚未实现。
 - [x] package 版本升到 `1.1.8`。
+
+## V1.1.9 MCP Permission Policy 验收
+
+- [x] 新增 `data/config/permission_policy.config.json`。
+- [x] 新增 `companion.permissions.summary` local protocol method。
+- [x] 新增 `companion_permissions_summary` MCP tool。
+- [x] `context.summary` 增加安全的 `permissionPolicySummary`。
+- [x] 控制中心 AI 接入面板展示 permission policy enabled、blocked count 和 confirmation-required count。
+- [x] 默认 permission policy 不阻断既有 MCP 能力。
+- [x] policy 中所有 `COMPANION_PROTOCOL_METHODS` 都有规则。
+- [x] disabled method 会返回 permission denied 并记录活动。
+- [x] 文档明确 `V1.1.9` 不是完整权限弹窗系统。
+- [x] package 版本升到 `1.1.9`。
 
 ## V1.2.0 用户交互动作验收
 
 - [x] `guofeng_ai` 有 profile-scoped `interaction_rules.config.json`。
 - [x] Renderer 已具备 profile-scoped interaction 调度底座。
-- [ ] `click_head_happy` source/WebM/keyframe/QA 到位并标记 runtime ready。
-- [ ] `click_body_confused` source/WebM/keyframe/QA 到位并标记 runtime ready。
-- [ ] `drag_start_lift` source/WebM/keyframe/QA 到位并标记 runtime ready。
-- [ ] `drag_end_dizzy` source/WebM/keyframe/QA 到位并标记 runtime ready。
+- [x] `click_head_happy` source/WebM/keyframe/QA 到位并标记 runtime ready。
+- [x] `click_body_confused` source/WebM/keyframe/QA 到位并标记 runtime ready。
+- [x] `drag_start_lift` source/WebM/keyframe/QA 到位并标记 runtime ready。
+- [x] `drag_end_dizzy` source/WebM/keyframe/QA 到位并标记 runtime ready。
+- [x] Renderer 按点击命中区域上半/下半分流 `click_head` / `click_body`。
+- [x] 拖动链路按 `drag_start_lift -> drag_hold_lift -> drag_end_dizzy` 接入。
 - [ ] 手动验证 click/drag 交互均可触发正确动作。
-- [ ] 验收通过后 package 版本升到 `1.2.0`。
+- [x] package 版本升到 `1.2.0`。
+
+## V1.2.1 Codex 授权提示验收
+
+- [x] Codex PermissionRequest 文案明确提示在 Codex 中确认授权。
+- [x] 新 Codex `waiting_auth` 状态写入 60 秒 `expiresAt`。
+- [x] Electron main 清理旧格式中超过 60 秒的无 `expiresAt` `waiting_auth`。
+- [x] MCP confirmation 控制中心卡片行为保持不变。
+- [x] package 版本升到 `1.2.1`。
+
+## V1.2.2 原生点击与拖动节奏验收
+
+- [x] macOS helper 仅在 profile 启用 click rules 时拦截人物 alpha 区域普通左键。
+- [x] 人物外透明区域继续穿透桌面。
+- [x] 普通点击按命中区域分流 `click_head` / `click_body`；Option 仅用于抓起拖动。
+- [x] `drag_start_lift` 使用 `speedFactor: 6.0` 重转 WebM、keyframe 和多底色 QA。
+- [x] `mouse_leave_back` 保留临时运行并标记为 QA 不合格、待替换。
+- [ ] 手动验证人物点击不再触发 macOS 显示桌面。
+- [ ] 手动验证 Option + 拖动起始反馈节奏自然。
+- [x] package 版本升到 `1.2.2`。
+
+## V1.4.0 声明式插件运行时验收
+
+- [x] 新增内置与 Electron `userData` 本地 manifest 扫描。
+- [x] 三个内置示例默认关闭。
+- [x] manifest 拒绝重复 ID、未知 trigger/effect、脚本字段、URL、绝对路径、危险消息、未知 reaction 和非法 TTL。
+- [x] interval、idle、condition 边沿和 cooldown 进入 contract。
+- [x] random action 只从当前 profile runtime-ready action 中选择。
+- [x] 控制中心新增“插件”页，支持启停和刷新本地目录。
+- [x] 开关覆盖值持久化到 Electron `userData`，不修改 repo manifest。
+- [x] 新增 `companion.plugins.summary` 和 `companion_plugins_summary`。
+- [x] `context.summary` 增加安全 `pluginSummary`。
+- [x] activity ring buffer 增加 `plugin_trigger / plugin_skip / plugin_error`。
+- [x] `npm run typecheck`、`npm run build`、`npm run agent:contract`、`npm run profile:contract`、`npm run plugin:contract` 通过。
+- [ ] 手动验证插件页、开关重启保留、本地合法/非法 manifest 刷新。
+- [ ] 手动验证 reminder、task、Agent、Codex 和用户交互不会被插件抢占。
+
+## V1.2.3 头部实体命中验收
+
+- [x] `guofeng_ai` 配置 `hitZones.clickHeadMaxYRatio: 0.34`。
+- [x] 人物 alpha 轮廓点击容差调整为 `10px`。
+- [x] 动作切换时空 regions 不覆盖上一帧有效命中区域。
+- [x] 拖动开始直接进入 `drag_hold_lift` 循环，不播放 `drag_start_lift`。
+- [x] 拖动释放后仍播放 `drag_end_dizzy` 收尾。
+- [ ] 手动验证点击脸部或头发区域触发 `click_head_happy`。
+- [ ] 手动验证点击身体仍触发 `click_body_confused`。
+- [x] package 版本升到 `1.2.3`。
 
 ## V1.1.0 AI/Agent 接入验收
 
@@ -148,6 +211,17 @@ npm run motion:progress
 - [x] Codex MCP 可调用 `companion_say`，桌宠显示短消息并触发 `success` reaction。
 - [x] Codex MCP 可调用 `companion_react`，桌宠进入 `thinking` reaction。
 - [x] `say/react` cooldown 在连续调用时返回结构化错误，不破坏运行时状态。
+
+## V1.3.0 本地 Profile Package 验收
+
+- [x] `legacy_real` 和 `guofeng_ai` 都有 `profile_package.config.json`。
+- [x] CLI 支持 `export / inspect / validate / install`。
+- [x] 控制中心支持导入和移除非内置角色。
+- [x] 缺非核心视频的包可安装并显示 warning；缺 `idle` 或必需配置时拒绝激活。
+- [x] 已安装资产通过受控 asset namespace 读取，不向 renderer 暴露本机绝对路径。
+- [x] contract checks 覆盖路径穿越、符号链接、可执行脚本、缺 required asset 和覆盖内置角色拒绝。
+- [x] 手动从控制中心导入一个非内置测试角色包，并验证切换、warning 和移除回落。
+- [x] package 版本升到 `1.3.0`。
 
 ## 分发/开源预留验收
 

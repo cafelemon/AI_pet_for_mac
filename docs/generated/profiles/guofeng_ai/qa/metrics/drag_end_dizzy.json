@@ -1,0 +1,27 @@
+{
+  "state": "drag_end_dizzy",
+  "alpha_bbox": {
+    "x1": 588,
+    "y1": 1000,
+    "x2": 936,
+    "y2": 1664,
+    "width": 349,
+    "height": 665
+  },
+  "main_component": {
+    "x1": 588,
+    "y1": 1000,
+    "x2": 936,
+    "y2": 1664,
+    "width": 349,
+    "height": 665,
+    "area": 93694
+  },
+  "foreground_pixels": 93805,
+  "blue_residual_pixels": 2723,
+  "blue_residual_ratio": 0.0290283033953414,
+  "edge_foreground_pixels": 63348,
+  "edge_blue_residual_pixels": 2360,
+  "edge_blue_residual_ratio": 0.037254530529772054,
+  "low_alpha_blue_residual_pixels": 1030
+}

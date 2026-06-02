@@ -283,28 +283,28 @@
       "id": "click_head_happy",
       "label": "click head happy",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.2.0",
       "playback": "one_shot",
       "description": "点击头部：开心眨眼或轻轻笑一下，短反馈",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "click_body_confused",
       "label": "click body confused",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.2.0",
       "playback": "one_shot",
       "description": "点击身体：轻微困惑、歪头或小退半步",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "drag_start_lift",
       "label": "drag start lift",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.2.0",
       "playback": "one_shot",
       "description": "鼠标抓起：参考古风角色被鼠标抓起的反馈动作",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "drag_hold_lift",
@@ -319,10 +319,10 @@
       "id": "drag_end_dizzy",
       "label": "drag end dizzy",
       "category": "用户交互",
-      "stage": "P1-A",
+      "stage": "V1.2.0",
       "playback": "one_shot",
       "description": "拖拽结束：落地后轻微晕乎，然后恢复站稳",
-      "runtime": false
+      "runtime": true
     },
     {
       "id": "stand_to_reading",

@@ -14,6 +14,9 @@ import type {
   ControlCenterModule,
   CreateReminderInput,
   CreateTaskInput,
+  DeclarativePluginFeedback,
+  DeclarativePluginFeedbackResult,
+  DeclarativePluginSummary,
   InputPermissionStatus,
   InteractionRulesConfig,
   ManualRenderSelection,
@@ -47,7 +50,10 @@ const PET_PROFILE_CHANGED_CHANNEL = 'pet-profile:changed';
 const CONTROL_CENTER_MODULE_CHANNEL = 'control-center:module';
 const SHORTCUTS_UPDATED_CHANNEL = 'shortcuts:updated';
 const INPUT_PERMISSION_STATUS_CHANNEL = 'input-permission:status';
+const INTERACTION_CLICK_CHANNEL = 'interaction:click';
 const INTERACTION_DRAG_ACTIVE_CHANNEL = 'interaction:drag-active';
+const DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL = 'plugin:feedback';
+const DECLARATIVE_PLUGINS_UPDATED_CHANNEL = 'plugin:updated';
 const COMPANION_COMMANDS = new Set<CompanionCommand>([
   'next-state',
   'previous-state',
@@ -80,6 +86,15 @@ const companionAPI: CompanionAPI = {
     ipcRenderer.invoke('config:get-interaction-rules') as Promise<InteractionRulesConfig>,
   getPetProfiles: () => ipcRenderer.invoke('pet-profile:list') as Promise<PetProfileState>,
   setPetProfile: (profileId: string) => ipcRenderer.invoke('pet-profile:set', profileId) as Promise<PetProfileState>,
+  importPetProfile: () => ipcRenderer.invoke('pet-profile:import') as Promise<PetProfileState>,
+  removePetProfile: (profileId: string) => ipcRenderer.invoke('pet-profile:remove', profileId) as Promise<PetProfileState>,
+  getDeclarativePlugins: () => ipcRenderer.invoke('plugins:get-summary') as Promise<DeclarativePluginSummary>,
+  setDeclarativePluginEnabled: (pluginId: string, enabled: boolean) =>
+    ipcRenderer.invoke('plugins:set-enabled', pluginId, enabled) as Promise<DeclarativePluginSummary>,
+  refreshDeclarativePlugins: () => ipcRenderer.invoke('plugins:refresh') as Promise<DeclarativePluginSummary>,
+  reportDeclarativePluginFeedback: (result: DeclarativePluginFeedbackResult) => {
+    ipcRenderer.send('plugins:feedback-result', result);
+  },
   assetUrl: (relativePath: string) => `companion-asset:///${encodeAssetPath(relativePath)}`,
   getCodexRuntimeState: () => ipcRenderer.invoke('codex:get-runtime-state') as Promise<CodexRenderState | null>,
   getAgentRuntimeState: () => ipcRenderer.invoke('agent:get-runtime-state') as Promise<AgentRenderState | null>,
@@ -113,6 +128,8 @@ const companionAPI: CompanionAPI = {
     ipcRenderer.invoke('window:set-mouse-hit-test', canInteract) as Promise<boolean>,
   setMouseHitRegions: (regions: MouseHitRegion[]) =>
     ipcRenderer.invoke('window:set-mouse-hit-regions', regions) as Promise<void>,
+  setNativeClickCapture: (enabled: boolean) =>
+    ipcRenderer.invoke('window:set-native-click-capture', enabled) as Promise<void>,
   setWindowDragActive: (active: boolean) =>
     ipcRenderer.invoke('window:set-drag-active', active) as Promise<void>,
   moveWindowBy: (deltaX: number, deltaY: number) =>
@@ -205,6 +222,16 @@ const companionAPI: CompanionAPI = {
       ipcRenderer.removeListener(INPUT_PERMISSION_STATUS_CHANNEL, listener);
     };
   },
+  onInteractionClick: (callback) => {
+    const listener = (_event: IpcRendererEvent, point: MouseHitTestPoint): void => {
+      callback(point);
+    };
+
+    ipcRenderer.on(INTERACTION_CLICK_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(INTERACTION_CLICK_CHANNEL, listener);
+    };
+  },
   onInteractionDragActive: (callback) => {
     const listener = (_event: IpcRendererEvent, active: boolean): void => {
       callback(active);
@@ -293,6 +320,26 @@ const companionAPI: CompanionAPI = {
     ipcRenderer.on(TASKS_UPDATED_CHANNEL, listener);
     return () => {
       ipcRenderer.removeListener(TASKS_UPDATED_CHANNEL, listener);
+    };
+  },
+  onDeclarativePluginFeedback: (callback) => {
+    const listener = (_event: IpcRendererEvent, feedback: DeclarativePluginFeedback): void => {
+      callback(feedback);
+    };
+
+    ipcRenderer.on(DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL, listener);
+    };
+  },
+  onDeclarativePluginsUpdated: (callback) => {
+    const listener = (_event: IpcRendererEvent, summary: DeclarativePluginSummary): void => {
+      callback(summary);
+    };
+
+    ipcRenderer.on(DECLARATIVE_PLUGINS_UPDATED_CHANNEL, listener);
+    return () => {
+      ipcRenderer.removeListener(DECLARATIVE_PLUGINS_UPDATED_CHANNEL, listener);
     };
   }
 };

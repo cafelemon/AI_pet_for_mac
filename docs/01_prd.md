@@ -1,7 +1,7 @@
 # Product Requirements Document
 
-版本：`V1.1.8`
-更新时间：2026-05-31
+版本：`V1.3.0`
+更新时间：2026-06-01
 
 ## 1. 背景
 
@@ -154,7 +154,7 @@
 
 - 摘要不暴露 token、socket path、discovery path、绝对路径或长日志。
 - 活动记录只保存在内存 ring buffer，不落盘。
-- `V1.2.0` click/drag 缺素材仍保持待补。
+- `V1.2.0` click/drag 视频已补齐，后续缺口不再阻塞当前用户交互动作验收。
 
 ## 10. V1.1.8 产品需求：Profile Capability Manifest
 
@@ -176,10 +176,77 @@
 验收：
 
 - 返回内容不暴露 token、socket path、discovery path、绝对素材路径或本地 cwd。
-- `guofeng_ai` 显示鼠标害羞链路和 `drag_hold_lift` 已 ready，四个 click/drag P0 动作缺 source。
+- `guofeng_ai` 显示鼠标害羞链路、点击头部、点击身体和拖拽 start/hold/end 已 ready。
 - `legacy_real` 使用保守声明，不继承 `guofeng_ai` 的交互能力。
 
-## 11. 未来预留
+## 11. V1.1.9 产品需求：MCP Permission Policy
+
+定位：MCP L5 最小治理层，不是完整权限弹窗系统。
+
+目标：
+
+- 让外部 agent 能读取每个 MCP 方法的风险分层、allow/deny 状态和确认要求。
+- 默认不阻断既有 MCP 能力，避免破坏 Codex MCP 已验证链路。
+- 为插件能力、长期偏好、App Store 权限说明和未来强制确认策略打基础。
+- 继续明确 `companion.events.subscribe` 尚未实现，不把事件流误写成当前能力。
+
+能力：
+
+- `companion.permissions.summary()`
+- MCP tool：`companion_permissions_summary`
+- `companion.context.summary()` 增加精简的 `permissionPolicySummary`
+- `data/config/permission_policy.config.json`
+
+验收：
+
+- 权限摘要不暴露 token、socket path、discovery path、绝对素材路径或本地 cwd。
+- 默认策略中所有 `COMPANION_PROTOCOL_METHODS` 都有规则。
+- 默认策略全允许，既有 `say/react/agent/confirm/context/activity/profile.*` 行为保持不变。
+- 被配置为 disabled 的方法返回 permission denied，并记录活动。
+
+## 12. V1.2.0 产品需求：用户交互动作补全
+
+定位：补齐 `guofeng_ai` 的 P1-A 用户交互动作，让桌宠不只展示状态，也能对用户点击和拖拽做动作回应。
+
+能力：
+
+- 鼠标靠近/移开继续使用 `mouse_hover_look -> mouse_shy_loop -> mouse_leave_back`。
+- 点击头部触发 `click_head_happy`。
+- 点击身体触发 `click_body_confused`。
+- 拖拽使用 `drag_start_lift -> drag_hold_lift -> drag_end_dizzy`，两个衔接态透明 WebM 输出阶段加速 `2.0x`。
+
+验收：
+
+- 四个补齐动作都有 source/WebM/keyframe/QA。
+- 拖动链路按首尾帧实际大小和位置对齐。
+- `legacy_real` 不继承 `guofeng_ai` 的交互能力。
+
+## 13. V1.2.1 产品需求：Codex 授权提示修复
+
+定位：修复 Codex PermissionRequest 与 MCP confirmation 共用 `waiting_auth` 表达后造成的确认入口误解。
+
+验收：
+
+- Codex 权限请求显示“请在 Codex 中确认授权”，不误导用户打开控制中心。
+- Codex `waiting_auth` 最多保留 60 秒，旧格式无 `expiresAt` 状态也会自动失效。
+- MCP `companion.confirm.request` 仍正常打开控制中心确认卡片。
+
+## 14. V1.2.2 产品需求：点击命中与拖动起始节奏
+
+- 普通左键点击人物 alpha 区域触发头部/身体动作，不允许穿透到 macOS 桌面。
+- 人物外透明区域继续穿透，保持桌面可操作。
+- Option 仅用于抓起拖动；普通点击不要求组合键。
+- `drag_start_lift` 使用相对原始 source 的 `6.0x` 加速。
+- `mouse_leave_back` 临时保留运行，但明确标记为 QA 不合格、等待替换视频。
+
+## 15. V1.2.3 产品需求：头部实体命中校准
+
+- 点击头部按当前人物实体 bbox 的顶部区间判断，不按桌宠整窗高度判断。
+- `guofeng_ai` 头部区间为顶部 `34%`，alpha 轮廓点击容差为 `10px`。
+- 动作切换期间继续使用上一帧有效命中区域，直到新帧 regions 到位。
+- 拖动开始时直接进入 `drag_hold_lift` 循环，不播放起始衔接态；释放后保留 `drag_end_dizzy` 收尾。
+
+## 12. 未来预留
 
 苹果商店/桌面分发预留：
 
@@ -192,10 +259,18 @@
 
 - 核心 runtime、协议、MCP/server/client、schema 和示例 profile 可以开源。
 - 商业或版权不明确的素材、生成源视频、模型中间文件应与核心代码分离。
+
+## 16. V1.3.0 产品需求：本地 Profile Package
+
+- 角色应可导出为本地单文件包，并在控制中心导入和移除。
+- 包内必须声明 runtime 配置入口、资产根目录、required action、QA summary、license 和 provenance。
+- 缺非核心视频允许安装并展示 warning；缺少 `idle` 或必需配置时禁止切换。
+- 内置 profile 不允许被本地包覆盖或移除。
+- 导入只处理本地文件，不新增远程市场、在线下载或任意脚本执行。
 - 每个 profile/package 需要 license manifest、source provenance 和可发布状态。
 - 插件系统先声明式、受限能力，再考虑脚本运行时。
 
-## 12. 成功标准
+## 13. 成功标准
 
 `V1.0.0` 成功标准：
 
@@ -210,3 +285,11 @@
 - 有协议 contract tests。
 - Codex/MCP 至少有一个可演示调用链路。
 - 控制中心可查看 AI/Agent 接入状态。
+
+## V1.4.0 声明式插件运行时
+
+- 插件来源仅为内置 `data/plugins/*.plugin.json` 和 Electron `userData/plugins/*.plugin.json`。
+- Trigger 仅支持 `interval / idle / condition`；Effect 仅支持 `speech_pool / reaction_pool / random_action`。
+- 插件反馈始终低于 reminder、task、agent、Codex 和用户交互；冲突时跳过并记录，不排队补播。
+- 本轮不开放脚本、shell、动态模块、远程下载、网络请求、文件写入、提醒创建、任务修改或 profile 切换。
+- 缺失或 QA 不合格视频继续只更新台账和 manifest，不生成占位素材。

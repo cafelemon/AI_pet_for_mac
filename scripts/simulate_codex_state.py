@@ -18,7 +18,7 @@ DEFAULT_MESSAGES = {
     "idle": None,
     "coding": "正在运行...",
     "thinking": "我在想...",
-    "waiting_auth": "需要你确认一下",
+    "waiting_auth": "请在 Codex 中确认授权",
     "success": "完成啦",
     "error": "出问题了",
 }

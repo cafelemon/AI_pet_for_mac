@@ -5,9 +5,9 @@ This table is generated for profile `guofeng_ai` from its motion catalog and loc
 ## Summary
 
 - Total planned actions: 42
-- WebM complete: 19
+- WebM complete: 23
 - Source videos ready, pending WebM conversion: 0
-- Waiting for source videos: 23
+- Waiting for source videos: 19
 
 ## Progress Table
 
@@ -44,11 +44,11 @@ This table is generated for profile `guofeng_ai` from its motion catalog and loc
 | V1.1.3 | 用户交互 | `mouse_hover_look` (mouse hover look) | `one_shot` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_hover_look/source/mouse_hover_look_source.mp4` |
 | V1.1.3 | 用户交互 | `mouse_shy_loop` (mouse shy loop) | `loop` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_shy_loop/source/mouse_shy_loop.mp4` |
 | V1.1.3 | 用户交互 | `mouse_leave_back` (mouse leave back) | `one_shot` | yes | guofeng_ai | `guofeng_mouse_cursor` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/mouse_leave_back/source/mouse_leave_back_source.mp4` |
-| P1-A | 用户交互 | `click_head_happy` (click head happy) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source/click_head_happy_source.mp4` |
-| P1-A | 用户交互 | `click_body_confused` (click body confused) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source/click_body_confused_source.mp4` |
-| P1-A | 用户交互 | `drag_start_lift` (drag start lift) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/drag_start_lift/source/drag_start_lift_source.mp4` |
+| V1.2.0 | 用户交互 | `click_head_happy` (click head happy) | `one_shot` | yes | guofeng_ai | `doubao_ai_main_states` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source/click_head_happy_source.mp4` |
+| V1.2.0 | 用户交互 | `click_body_confused` (click body confused) | `one_shot` | yes | guofeng_ai | `doubao_ai_main_states` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source/click_body_confused_source.mp4` |
+| V1.2.0 | 用户交互 | `drag_start_lift` (drag start lift) | `one_shot` | yes | guofeng_ai | `doubao_ai_main_states` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/drag_start_lift/source/drag_start_lift_source.mp4` |
 | Guofeng V1 | 用户交互 | `drag_hold_lift` (drag hold lift) | `loop` | yes | guofeng_ai | `none` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/drag_hold_lift/source/drag_hold_lift.mp4` |
-| P1-A | 用户交互 | `drag_end_dizzy` (drag end dizzy) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/source/drag_end_dizzy_source.mp4` |
+| V1.2.0 | 用户交互 | `drag_end_dizzy` (drag end dizzy) | `one_shot` | yes | guofeng_ai | `doubao_ai_main_states` | `blue_screen` | `none` | yes | yes | yes | 完成：WebM 已生成 | `assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/source/drag_end_dizzy_source.mp4` |
 | Priority Idle V2 | 姿态衔接 | `stand_to_reading` (stand to reading) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/transitions/stand_to_reading/source/stand_to_reading_source.mp4` |
 | Priority Idle V2 | 姿态衔接 | `reading_to_stand` (reading to stand) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/transitions/reading_to_stand/source/reading_to_stand_source.mp4` |
 | Priority Idle V2 | 姿态衔接 | `stand_to_coding` (stand to coding) | `one_shot` | no | guofeng_ai | `none` | `white` | `none` | no | no | no | 待补源视频 | `assets/profiles/guofeng_ai/actions/transitions/stand_to_coding/source/stand_to_coding_source.mp4` |

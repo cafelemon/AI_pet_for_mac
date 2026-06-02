@@ -104,6 +104,16 @@ const TOOL_DEFINITIONS = [
     }
   },
   {
+    name: 'companion_permissions_summary',
+    description: 'Read Desktop AI Companion MCP permission policy groups, blocked methods, and confirmation requirements.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false }
+  },
+  {
+    name: 'companion_plugins_summary',
+    description: 'Read the safe Desktop AI Companion declarative plugin runtime summary.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false }
+  },
+  {
     name: 'companion_profile_list',
     description: 'List available Desktop AI Companion pet profiles and readiness.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false }
@@ -145,6 +155,8 @@ const TOOL_METHODS = {
   companion_confirm_cancel: 'companion.confirm.cancel',
   companion_context_summary: 'companion.context.summary',
   companion_activity_list: 'companion.activity.list',
+  companion_permissions_summary: 'companion.permissions.summary',
+  companion_plugins_summary: 'companion.plugins.summary',
   companion_profile_list: 'companion.profile.list',
   companion_profile_capabilities: 'companion.profile.capabilities',
   companion_profile_select: 'companion.profile.select'
@@ -231,7 +243,7 @@ async function handleJsonRpc(message) {
     return jsonRpcResult(message.id, {
       protocolVersion: message.params?.protocolVersion || '2025-06-18',
       capabilities: { tools: {} },
-      serverInfo: { name: 'desktop-ai-companion', version: '1.1.8' }
+      serverInfo: { name: 'desktop-ai-companion', version: '1.4.0' }
     });
   }
   if (message.method === 'tools/list') {

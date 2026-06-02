@@ -9,9 +9,9 @@
 
 ## 当前版本
 
-- 当前版本：`V1.1.8`
+- 当前版本：`V1.3.0`
 - 基线冻结版本：`V1.0.0`
-- npm 版本号：`1.1.8`
+- npm 版本号：`1.2.3`
 - 默认 profile：`legacy_real`
 - 新 profile：`guofeng_ai`
 
@@ -95,6 +95,7 @@ P1-A 用户交互动作当前是 placeholder，source video 未补齐前不得�
 - `companion.confirm.cancel`
 - `companion.context.summary`
 - `companion.activity.list`
+- `companion.permissions.summary`
 - `companion.profile.list`
 - `companion.profile.capabilities`
 - message validator
@@ -122,6 +123,7 @@ startup_timeout_sec = 30
 - 调用 `companion_confirm_request`，控制中心应出现确认卡片，用户响应后可用 `companion_confirm_get` 读取结果。
 - 调用 `companion_context_summary`，应返回不含 token/socket/discovery/绝对路径的安全摘要。
 - 调用 `companion_activity_list`，应返回最近有限条内存活动记录。
+- 调用 `companion_permissions_summary`，应返回 MCP 方法风险分层、allow/deny 状态和确认要求。
 - 调用 `companion_profile_capabilities`，应返回当前 profile 的 ready、missing source、video blocked 和分发预留摘要。
 
 反应映射原则：
@@ -142,12 +144,24 @@ startup_timeout_sec = 30
 - L2 已落地：agent 状态面板，表达 working、waiting_auth、blocked、testing、done 等状态。
 - L3 已落地最小闭环：用户确认流，让 agent 的授权请求能通过控制中心表达和回收。
 - L4 已落地最小只读能力：上下文摘要和活动记录，减少轮询并服务多 agent；`companion.events.subscribe` 尚未实现。
-- L5 已落地最小 profile 能力声明；插件能力、权限和偏好仍是后续 companion kernel 范围。
+- L5 已落地最小 profile 能力声明和 permission policy；插件能力和长期偏好仍是后续 companion kernel 范围。
 
 实现边界：
 
 - 不要把候选方法写成已实现工具。
 - 新增 MCP 方法前必须同步 local protocol、stdio adapter、contract check 和 Codex MCP smoke test。
+
+## V1.4.0 声明式插件运行时
+
+- 插件只扫描内置 `data/plugins/*.plugin.json` 与 Electron `userData/plugins/*.plugin.json`。
+- manifest 只允许 `interval / idle / condition` trigger 和 `speech_pool / reaction_pool / random_action` effect。
+- 插件消息复用现有 validator；reaction 必须在白名单；random action 必须属于当前 profile 且 runtime-ready。
+- renderer 把插件反馈视为最低优先级：reminder、task、Agent、Codex、hover、click、drag 活跃时直接跳过或中断。
+- 开关覆盖值持久化在 Electron `userData`，不要修改 repo manifest。
+- MCP 只新增只读 `companion.plugins.summary()` / `companion_plugins_summary`。
+- 插件错误 summary 不暴露 userData 路径、token、socket path 或 discovery path。
+- 不开放 JS、shell、动态模块、网络请求、文件写入、插件压缩包导入或业务写操作。
+- 修改插件运行时时同步运行 `npm run plugin:contract`。
 - MCP 的目标不是做聊天窗口，而是把 agent 的状态、意图、确认和结果翻译成本地 companion 体验。
 
 ## V1.1.5 MCP Agent 状态面板
@@ -219,10 +233,27 @@ startup_timeout_sec = 30
 实现边界：
 
 - manifest 用于告诉 agent 当前 profile 能做什么、缺什么、哪些能力只是临时入口。
-- `guofeng_ai` 的 click/drag 四条 P0 动作继续标记为缺 source，不允许当成 runtime ready。
+- `guofeng_ai` 的 click/drag 四条 P0 动作已在 `V1.2.0` 补齐，后续不得再按 video blocked 处理。
 - `legacy_real` 使用保守能力声明，不继承古风 profile 的新交互。
 - 返回内容不得包含 token、socket path、discovery path、绝对素材路径或本地 cwd。
 - L4 `companion.events.subscribe` 仍是 TODO，不要在 agent 行为里假设有 streaming event。
+
+## V1.1.9 MCP Permission Policy
+
+当前已落地：
+
+- `companion.permissions.summary()`
+- stdio MCP tool：`companion_permissions_summary`
+- `data/config/permission_policy.config.json`
+- `context.summary` 中的 `permissionPolicySummary`
+
+实现边界：
+
+- 默认策略不阻断既有 MCP 能力，只声明风险分层和治理口径。
+- 所有 protocol methods 都必须有 permission rule。
+- disabled method 会返回 permission denied，并写入 activity ring buffer。
+- `requiresConfirmation` 当前是声明和后续强制确认预留，不是完整权限弹窗系统。
+- `companion.events.subscribe` 仍未实现。
 
 ## V1.1.2 鼠标靠近害羞接入
 
@@ -253,24 +284,44 @@ startup_timeout_sec = 30
 
 - 只调整鼠标害羞三段动作节奏。
 - 不改变 hover -> shy loop -> leave 的 runtime 语义。
-- 不启用 click/drag，也不将 `V1.2.0` 标记完成。
+- `V1.1.3` 不启用 click/drag；`V1.2.0` 已完成 click/drag 补齐。
 
 ## V1.2.0 用户交互接入
 
-当前方向：
+当前已落地：
 
 - 只覆盖 `guofeng_ai`。
 - `legacy_real` 不补 P1-A 素材，不启用 profile-scoped 交互。
 - 交互规则入口：`data/profiles/guofeng_ai/interaction_rules.config.json`
 - 视频生成提示词：`docs/generated/profiles/guofeng_ai/p1_interaction_video_prompts.md`
 - 视频供给台账：`docs/10_video_supply_progress.md`
+- `click_head_happy`、`click_body_confused`、`drag_start_lift`、`drag_hold_lift`、`drag_end_dizzy` 已具备 source/WebM/keyframe/QA。
 
 实现边界：
 
 - click 是中优先级交互，不抢占 task/reminder/agent/Codex 状态。
 - drag 后续使用 `drag_start_lift -> drag_hold_lift -> drag_end_dizzy`。
-- 在 source videos、透明 WebM、fallback keyframe 和 QA 未到位前，不得把 P1-A 动作标记为 runtime ready。
-- 当前没有可调用的视频生成工具时，保留工程接入和提示词，不用低质量本地占位冒充 AI 视频。
+- 继续以真实 source videos、透明 WebM、fallback keyframe 和 QA 作为 runtime ready 前提。
+- 新增或替换交互视频时，必须重新检查首尾帧对齐和多底色 QA。
+
+## V1.2.1 Codex 授权提示
+
+- Codex hook `PermissionRequest` 表示用户需要在 Codex 界面确认授权，不代表控制中心存在 confirmation 卡片。
+- 只有 MCP `companion.confirm.request` 才会打开控制中心临时确认入口。
+- Codex `waiting_auth` 默认 60 秒失效，避免旧状态在 app 重启后残留。
+
+## V1.2.2 点击捕获与素材替换标记
+
+- 普通左键点击人物即可触发头部/身体反馈；Option 只用于抓起拖动。
+- macOS 原生 helper 只在当前 profile 具备 click rules 时启用人物 alpha 区域捕获，透明区域保持穿透。
+- `drag_start_lift` 使用 `speedFactor: 6.0`；原始 source 不覆盖。
+- `mouse_leave_back` 当前仍可运行，但 QA 不合格。后续收到新视频时必须优先替换、重转并复查多底色 QA。
+
+## V1.2.3 头部点击校准
+
+- 点击分流基于人物实体 bbox，不使用桌宠整窗高度。
+- `guofeng_ai` 通过 `interaction_rules.config.json` 声明头部顶部 `34%` 和 `10px` 点击容差。
+- 动作切换时不要用临时空 regions 覆盖上一帧有效命中区域。
 
 ## 分发与开源预留
 
@@ -281,6 +332,16 @@ startup_timeout_sec = 30
 - 不把本机私有路径写成产品依赖。
 - macOS 权限应可解释、可关闭、可记录。
 - 插件先做声明式和白名单能力，不默认运行任意脚本。
+
+## V1.3.0 本地 Profile Package
+
+- package manifest：`data/profiles/<profile>/profile_package.config.json`
+- CLI：`python3 scripts/profile_package.py export --profile <id>`、`inspect --package <path>`、`validate --package <path>`
+- 自动检查：`npm run profile:contract`
+- 已安装角色位于 Electron `userData/profiles/<profileId>/`，不要把该绝对路径写入 repo、renderer 或 MCP 返回值。
+- 缺非核心视频时允许导入并显示 warning；缺 `idle` 或必需配置时禁止切换。
+- 新发现的视频缺口只更新 package manifest、capability manifest 和 `docs/10_video_supply_progress.md`，不要制作低质量占位。
+- MCP 不承担角色包导入、覆盖或移除职责。
 
 ## 完成任务时的最低交付
 

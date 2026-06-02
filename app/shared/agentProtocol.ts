@@ -13,6 +13,8 @@ export const COMPANION_PROTOCOL_METHODS = [
   'companion.confirm.cancel',
   'companion.context.summary',
   'companion.activity.list',
+  'companion.permissions.summary',
+  'companion.plugins.summary',
   'companion.profile.list',
   'companion.profile.capabilities',
   'companion.profile.select'

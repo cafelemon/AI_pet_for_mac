@@ -4,7 +4,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import type { InputPermissionStatus, MouseHitRegion } from '../shared/types';
 
 interface MacInputEvent {
-  type: 'permission' | 'leftDown' | 'leftDragged' | 'leftUp' | 'rightDown';
+  type: 'permission' | 'leftClick' | 'leftDown' | 'leftDragged' | 'leftUp' | 'rightDown';
   status?: InputPermissionStatus;
   x?: number;
   y?: number;
@@ -22,6 +22,7 @@ export class MacInputService {
   private stdoutBuffer = '';
   private status: InputPermissionStatus = process.platform === 'darwin' ? 'unknown' : 'denied';
   private modifier = 'Option';
+  private clickCaptureEnabled = false;
   private bounds: HitBounds | null = null;
   private regions: MouseHitRegion[] = [];
 
@@ -64,7 +65,7 @@ export class MacInputService {
       this.setStatus('denied');
     });
 
-    this.send({ type: 'config', modifier: this.modifier });
+    this.send({ type: 'config', modifier: this.modifier, clickCaptureEnabled: this.clickCaptureEnabled });
     this.syncHitRegions(this.bounds, this.regions);
   }
 
@@ -84,6 +85,11 @@ export class MacInputService {
   updateModifier(modifier: string): void {
     this.modifier = modifier || 'Option';
     this.send({ type: 'config', modifier: this.modifier });
+  }
+
+  setClickCaptureEnabled(enabled: boolean): void {
+    this.clickCaptureEnabled = enabled;
+    this.send({ type: 'config', clickCaptureEnabled: enabled });
   }
 
   syncHitRegions(bounds: HitBounds | null, regions: MouseHitRegion[]): void {

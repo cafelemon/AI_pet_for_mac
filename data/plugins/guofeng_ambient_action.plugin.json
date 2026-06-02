@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "guofeng_ambient_action",
+  "version": "1.0.0",
+  "label": "古风随机动作",
+  "description": "仅在古风角色空闲时，偶尔播放一个当前已就绪动作。",
+  "enabledByDefault": false,
+  "profileIds": [
+    "guofeng_ai"
+  ],
+  "permissions": [
+    "display.action"
+  ],
+  "cooldownMs": 120000,
+  "triggers": [
+    {
+      "type": "interval",
+      "intervalMs": 120000
+    }
+  ],
+  "effects": [
+    {
+      "type": "random_action",
+      "ttlMs": 8000
+    }
+  ]
+}

@@ -14,7 +14,35 @@
       "cooldownMs": 600,
       "interruptLevel": "low",
       "returnToPrevious": true
+    },
+    "click_head": {
+      "action": "click_head_happy",
+      "cooldownMs": 1200,
+      "interruptLevel": "medium",
+      "returnToPrevious": true
+    },
+    "click_body": {
+      "action": "click_body_confused",
+      "cooldownMs": 1200,
+      "interruptLevel": "medium",
+      "returnToPrevious": true
+    },
+    "drag_hold": {
+      "action": "drag_hold_lift",
+      "cooldownMs": 0,
+      "interruptLevel": "high",
+      "returnToPrevious": false
+    },
+    "drag_end": {
+      "action": "drag_end_dizzy",
+      "cooldownMs": 0,
+      "interruptLevel": "high",
+      "returnTo": "idle"
     }
+  },
+  "hitZones": {
+    "clickHeadMaxYRatio": 0.34,
+    "clickPaddingPx": 10
   },
   "guards": {
     "sleep": {

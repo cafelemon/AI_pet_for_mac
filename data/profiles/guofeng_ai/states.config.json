@@ -188,17 +188,17 @@
     },
     "click_head_happy": {
       "playback": "one_shot",
-      "durationMs": 2400,
+      "durationMs": 5042,
       "idleWeight": 0
     },
     "click_body_confused": {
       "playback": "one_shot",
-      "durationMs": 2600,
+      "durationMs": 5042,
       "idleWeight": 0
     },
     "drag_start_lift": {
       "playback": "one_shot",
-      "durationMs": 1600,
+      "durationMs": 834,
       "idleWeight": 0
     },
     "drag_hold_lift": {
@@ -208,7 +208,7 @@
     },
     "drag_end_dizzy": {
       "playback": "one_shot",
-      "durationMs": 2200,
+      "durationMs": 2500,
       "idleWeight": 0
     },
     "bath_idle": {

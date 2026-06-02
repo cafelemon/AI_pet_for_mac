@@ -173,26 +173,34 @@
     "click_head_happy": {
       "provider": "guofeng_ai",
       "sourceFile": "click_head_happy_source.mp4",
-      "maskPreset": "none",
-      "mattePreset": "white"
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "idle"
     },
     "click_body_confused": {
       "provider": "guofeng_ai",
       "sourceFile": "click_body_confused_source.mp4",
-      "maskPreset": "none",
-      "mattePreset": "white"
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "layoutPreset": "idle"
     },
     "drag_start_lift": {
       "provider": "guofeng_ai",
       "sourceFile": "drag_start_lift_source.mp4",
-      "maskPreset": "none",
-      "mattePreset": "white"
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "speedFactor": 6.0
     },
     "drag_end_dizzy": {
       "provider": "guofeng_ai",
       "sourceFile": "drag_end_dizzy_source.mp4",
-      "maskPreset": "none",
-      "mattePreset": "white"
+      "maskPreset": "doubao_ai_main_states",
+      "mattePreset": "blue_screen",
+      "cropPreset": "none",
+      "speedFactor": 2.0
     },
     "stand_to_reading": {
       "provider": "guofeng_ai",
@@ -242,7 +250,8 @@
       "sourceFile": "drag_hold_lift.mp4",
       "maskPreset": "none",
       "mattePreset": "blue_screen",
-      "cropPreset": "none"
+      "cropPreset": "none",
+      "layoutPreset": "guofeng_drag_hold"
     },
     "bath_idle": {
       "provider": "guofeng_ai",

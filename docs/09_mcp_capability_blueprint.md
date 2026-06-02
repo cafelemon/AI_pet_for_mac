@@ -1,12 +1,12 @@
 # MCP Capability Blueprint
 
-更新时间：2026-05-31
+更新时间：2026-06-01
 规划版本：`V1.1.4`
-当前运行版本：`V1.1.8`
+当前运行版本：`V1.4.0`
 
 ## 定位
 
-`V1.1.4` 是 MCP/Agent 能力蓝图，不是新的 runtime 发布版本；`V1.1.5` 已实施 L2 agent 状态面板，`V1.1.6` 已实施 L3 用户确认流最小闭环，`V1.1.7` 已实施 L4 最小只读上下文能力，`V1.1.8` 已实施 L5 最小 profile 能力声明。缺失的 click/drag 交互素材继续归入 `V1.2.0`。
+`V1.1.4` 是 MCP/Agent 能力蓝图，不是新的 runtime 发布版本；`V1.1.5` 已实施 L2 agent 状态面板，`V1.1.6` 已实施 L3 用户确认流最小闭环，`V1.1.7` 已实施 L4 最小只读上下文能力，`V1.1.8` 已实施 L5 最小 profile 能力声明，`V1.1.9` 已实施 L5 最小 permission policy，`V1.2.0` 已补齐 `guofeng_ai` click/drag 用户交互动作。
 
 这份蓝图的目标是把桌宠从“可被 agent 调用的遥控层”推进为“能表达 agent 状态、确认流和上下文的本地 companion runtime”。在真正新增 MCP 方法前，先明确能力层级、边界、风险和验收口径。
 
@@ -25,7 +25,7 @@
 
 L1 的产品意义是“agent 可以安全调用桌宠”。它还不是完整 companion kernel。
 
-`V1.1.5` 已实施 L2 agent 状态面板，`V1.1.6` 已实施 L3 用户确认流最小闭环，`V1.1.7` 已实施 L4 上下文摘要与活动记录，`V1.1.8` 已实施 L5 profile capability manifest。
+`V1.1.5` 已实施 L2 agent 状态面板，`V1.1.6` 已实施 L3 用户确认流最小闭环，`V1.1.7` 已实施 L4 上下文摘要与活动记录，`V1.1.8` 已实施 L5 profile capability manifest，`V1.1.9` 已实施 L5 permission policy，`V1.2.0` 已完成用户交互动作补齐。
 
 ## 能力分层
 
@@ -76,7 +76,7 @@ L1 的产品意义是“agent 可以安全调用桌宠”。它还不是完整 c
 
 候选能力：
 
-- `companion.events.subscribe`：规划为后续事件流，不在 `V1.1.7` 或 `V1.1.8` 实现。
+- `companion.events.subscribe`：规划为后续事件流，不在 `V1.1.7`、`V1.1.8` 或 `V1.1.9` 实现。
 
 验收口径：
 
@@ -94,11 +94,15 @@ L1 的产品意义是“agent 可以安全调用桌宠”。它还不是完整 c
 - `companion.profile.capabilities`：返回当前或指定 profile 的安全能力声明。
 - `companion_profile_capabilities`：stdio MCP tool。
 - `profile_manifest.config.json`：记录 profile stage、MCP 层级、ready/missing/blocked actions、确认入口和分发预留。
+- `companion.permissions.summary`：返回 MCP 方法风险分层、allow/deny 状态和确认要求。
+- `companion_permissions_summary`：stdio MCP tool。
+- `permission_policy.config.json`：声明 method group、allowed、requiresConfirmation 和说明。
+- `companion.plugins.summary`：返回安全的声明式插件摘要。
+- `companion_plugins_summary`：stdio MCP tool。
+- `data/plugins/*.plugin.json`：声明式展示插件 manifest。
 
 候选方向：
 
-- Plugin capability manifest：声明插件能读写哪些 companion 能力。
-- Permission policy：区分只读状态、低风险展示、高风险确认和未来系统级操作。
 - Preference store：记录用户偏好的打扰程度、展示风格、默认 profile 和确认策略。
 
 验收口径：
@@ -113,7 +117,8 @@ L1 的产品意义是“agent 可以安全调用桌宠”。它还不是完整 c
 2. 已完成 L3 最小闭环：确认流把桌宠从提示 UI 推进为本地 companion 授权入口。
 3. 已完成 L4 最小只读能力：上下文摘要和活动列表减少轮询，并服务多 agent。
 4. 已完成 L5 最小 profile 能力声明：先让 agent 读懂 profile 能力边界。
-5. 后续继续做 L4 事件流或 L5 插件/权限/偏好，不与 V1.2 视频素材互相阻塞。
+5. 已完成 L5 最小 permission policy：先让 agent 读懂和遵守当前 method 治理边界。
+6. 后续继续做 L4 事件流或 L5 插件/偏好，不与 V1.2 视频素材互相阻塞。
 
 ## 当前不做
 

@@ -26,6 +26,13 @@ const AGENT_STATUS_TO_STATE = {
   done: 'success'
 };
 
+function protocolMethods() {
+  const source = readFileSync('app/shared/agentProtocol.ts', 'utf8');
+  const match = source.match(/COMPANION_PROTOCOL_METHODS = \[([\s\S]*?)\]/);
+  assert.ok(match, 'COMPANION_PROTOCOL_METHODS must be readable');
+  return [...match[1].matchAll(/'([^']+)'/g)].map((entry) => entry[1]);
+}
+
 function validateMessage(value, maxChars = 80) {
   if (typeof value !== 'string') return false;
   const message = value.trim().replace(/\s+/g, ' ');
@@ -120,20 +127,50 @@ function assertContextAndActivity() {
     stage: 'in_progress',
     ready: true,
     mcpLayers: ['L1_basic_remote_control', 'L2_agent_state_panel', 'L3_confirmation_flow', 'L4_readonly_context'],
-    readyInteractions: ['mouse_hover_look', 'mouse_shy_loop', 'mouse_leave_back', 'drag_hold_lift'],
-    missingSourceActions: ['click_head_happy', 'click_body_confused', 'drag_start_lift', 'drag_end_dizzy'],
-    blockedByVideoActions: ['click_head_happy', 'click_body_confused', 'drag_start_lift', 'drag_end_dizzy'],
+    readyInteractions: [
+      'mouse_hover_look',
+      'mouse_shy_loop',
+      'mouse_leave_back',
+      'click_head_happy',
+      'click_body_confused',
+      'drag_start_lift',
+      'drag_hold_lift',
+      'drag_end_dizzy'
+    ],
+    missingSourceActions: [],
+    blockedByVideoActions: [],
+    needsReplacementActions: ['mouse_leave_back'],
     confirmationEntry: 'control_center_temp',
     videoLedger: 'docs/10_video_supply_progress.md'
   };
   const contextSummary = {
-    appVersion: '1.1.8',
+    appVersion: '1.2.0',
     activeProfileId: 'guofeng_ai',
     profiles: [{ id: 'guofeng_ai', ready: true }],
     profileCapabilitiesSummary,
+    permissionPolicySummary: {
+      enabled: true,
+      version: 1,
+      groupCounts: {
+        readonly: 9,
+        display: 2,
+        agent_state: 2,
+        confirmation: 2,
+        profile_change: 1
+      },
+      blockedMethods: [],
+      confirmationRequiredMethods: []
+    },
     videoSupply: {
       ledger: 'docs/10_video_supply_progress.md',
-      v12BlockedActions: ['click_head_happy', 'click_body_confused', 'drag_start_lift', 'drag_end_dizzy']
+      v12BlockedActions: []
+    },
+    pluginSummary: {
+      enabled: true,
+      pluginCount: 3,
+      enabledCount: 0,
+      plugins: [],
+      recentErrors: []
     }
   };
   const serialized = JSON.stringify(contextSummary);
@@ -141,8 +178,10 @@ function assertContextAndActivity() {
   assert.equal(serialized.includes('socketPath'), false);
   assert.equal(serialized.includes('discoveryPath'), false);
   assert.equal(serialized.includes('/Users/'), false);
-  assert.equal(profileCapabilitiesSummary.missingSourceActions.includes('click_head_happy'), true);
+  assert.equal(profileCapabilitiesSummary.missingSourceActions.includes('click_head_happy'), false);
+  assert.equal(profileCapabilitiesSummary.readyInteractions.includes('click_head_happy'), true);
   assert.equal(profileCapabilitiesSummary.readyInteractions.includes('mouse_shy_loop'), true);
+  assert.equal(profileCapabilitiesSummary.needsReplacementActions.includes('mouse_leave_back'), true);
 
   const activities = [];
   function activityList(input = {}) {
@@ -164,16 +203,73 @@ function assertContextAndActivity() {
   assert.deepEqual(activityList({ limit: 1 }).map((entry) => entry.type), ['agent_state']);
 }
 
+function assertPermissionPolicy() {
+  const methods = protocolMethods();
+  const policy = JSON.parse(readFileSync('data/config/permission_policy.config.json', 'utf8'));
+  assert.equal(policy.enabled, true);
+
+  for (const method of methods) {
+    assert.ok(policy.rules[method], `permission policy missing method: ${method}`);
+    assert.equal(policy.rules[method].method, method);
+    assert.equal(policy.rules[method].allowed, true);
+  }
+
+  const serialized = JSON.stringify(policy);
+  assert.equal(serialized.includes('token'), false);
+  assert.equal(serialized.includes('socketPath'), false);
+  assert.equal(serialized.includes('discoveryPath'), false);
+  assert.equal(serialized.includes('/Users/'), false);
+
+  function enforcePermission(nextPolicy, method, activities) {
+    const rule = nextPolicy.rules[method];
+    if (!nextPolicy.enabled) return true;
+    if (!rule) throw new Error(`permission policy missing method: ${method}`);
+    if (!rule.allowed) {
+      activities.push({ type: 'permission_denied', summary: `permission denied: ${method}` });
+      throw new Error(`permission denied: ${method}`);
+    }
+    if (rule.requiresConfirmation) {
+      activities.push({ type: 'permission_denied', summary: `permission requires confirmation: ${method}` });
+      throw new Error(`permission requires confirmation: ${method}`);
+    }
+    return true;
+  }
+
+  const activities = [];
+  const disabledPolicy = structuredClone(policy);
+  disabledPolicy.rules['companion.say'].allowed = false;
+  assert.throws(() => enforcePermission(disabledPolicy, 'companion.say', activities), /permission denied/);
+  assert.deepEqual(activities.map((activity) => activity.type), ['permission_denied']);
+
+  const groupCounts = Object.values(policy.rules).reduce((counts, rule) => {
+    counts[rule.group] = (counts[rule.group] ?? 0) + 1;
+    return counts;
+  }, {});
+  assert.equal(groupCounts.readonly, 9);
+  assert.equal(groupCounts.display, 2);
+  assert.equal(groupCounts.agent_state, 2);
+  assert.equal(groupCounts.confirmation, 2);
+  assert.equal(groupCounts.profile_change, 1);
+}
+
 function assertProfileCapabilities() {
   const guofengCapabilities = JSON.parse(readFileSync('data/profiles/guofeng_ai/profile_manifest.config.json', 'utf8'));
   const legacyCapabilities = JSON.parse(readFileSync('data/profiles/legacy_real/profile_manifest.config.json', 'utf8'));
+  const guofengInteractionRules = JSON.parse(
+    readFileSync('data/profiles/guofeng_ai/interaction_rules.config.json', 'utf8')
+  );
 
   assert.equal(guofengCapabilities.profileId, 'guofeng_ai');
   assert.equal(legacyCapabilities.profileId, 'legacy_real');
   assert.equal(guofengCapabilities.capabilities.interactions.ready.includes('mouse_shy_loop'), true);
-  assert.equal(guofengCapabilities.assets.missingSourceActions.includes('drag_start_lift'), true);
-  assert.equal(guofengCapabilities.assets.blockedByVideoActions.includes('drag_end_dizzy'), true);
+  assert.equal(guofengCapabilities.capabilities.interactions.ready.includes('drag_start_lift'), true);
+  assert.equal(guofengCapabilities.assets.missingSourceActions.includes('drag_start_lift'), false);
+  assert.equal(guofengCapabilities.assets.blockedByVideoActions.includes('drag_end_dizzy'), false);
+  assert.equal(guofengCapabilities.assets.needsReplacementActions.includes('mouse_leave_back'), true);
   assert.equal(legacyCapabilities.capabilities.interactions.ready.includes('mouse_shy_loop'), false);
+  assert.equal(legacyCapabilities.assets.needsReplacementActions.length, 0);
+  assert.equal(guofengInteractionRules.hitZones.clickHeadMaxYRatio, 0.34);
+  assert.equal(guofengInteractionRules.hitZones.clickPaddingPx, 10);
   assert.equal(legacyCapabilities.assets.missingSourceActions.includes('click_head_happy'), false);
 
   const serialized = JSON.stringify({ guofengCapabilities, legacyCapabilities });
@@ -243,6 +339,8 @@ async function assertMcpAdapter() {
   assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_confirm_cancel'), true);
   assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_context_summary'), true);
   assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_activity_list'), true);
+  assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_permissions_summary'), true);
+  assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_plugins_summary'), true);
   assert.equal(tools.result.tools.some((tool) => tool.name === 'companion_profile_capabilities'), true);
 
   child.stdin.write(
@@ -310,6 +408,18 @@ async function assertMcpAdapter() {
   assert.match(profileCapabilitiesCall.result.content[0].text, /companion\.profile\.capabilities/);
   assert.match(profileCapabilitiesCall.result.content[0].text, /guofeng_ai/);
 
+  child.stdin.write(
+    `${JSON.stringify({ jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'companion_permissions_summary', arguments: {} } })}\n`
+  );
+  const permissionsSummaryCall = await readJsonLine();
+  assert.match(permissionsSummaryCall.result.content[0].text, /companion\.permissions\.summary/);
+
+  child.stdin.write(
+    `${JSON.stringify({ jsonrpc: '2.0', id: 13, method: 'tools/call', params: { name: 'companion_plugins_summary', arguments: {} } })}\n`
+  );
+  const pluginsSummaryCall = await readJsonLine();
+  assert.match(pluginsSummaryCall.result.content[0].text, /companion\.plugins\.summary/);
+
   child.kill();
   await rm(tempDir, { recursive: true, force: true });
 }
@@ -319,6 +429,7 @@ assertReactions();
 assertAgentStatuses();
 assertConfirmations();
 assertContextAndActivity();
+assertPermissionPolicy();
 assertProfileCapabilities();
 await assertMcpAdapter();
 console.log('Agent protocol contract checks passed.');

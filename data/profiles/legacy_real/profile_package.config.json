@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "profileId": "legacy_real",
+  "profileVersion": "1.3.0",
+  "label": "真人桌宠",
+  "description": "V1.0 冻结的真人桌宠本地角色包。",
+  "requiredAction": "idle",
+  "entrypoints": {
+    "companionConfig": "data/config/companion.config.json",
+    "statesConfig": "data/config/states.config.json",
+    "actionRegistry": "data/config/action_registry.config.json",
+    "interactionRules": "data/config/interaction_rules.config.json",
+    "motionCatalog": "data/config/motion_catalog.config.json",
+    "motionSources": "data/config/motion_sources.config.json",
+    "profileCapabilityManifest": "data/profiles/legacy_real/profile_manifest.config.json"
+  },
+  "assetsRoot": "assets/actions",
+  "qaSummaryPath": "qa-summary.json",
+  "missingSourceActions": [],
+  "needsReplacementActions": [],
+  "distribution": {
+    "publishable": false,
+    "license": "TBD",
+    "provenance": "legacy local asset set; publish provenance not finalized"
+  }
+}

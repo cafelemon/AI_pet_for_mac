@@ -1,14 +1,16 @@
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, screen, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, screen, shell } from 'electron';
 import type { MenuItemConstructorOptions, Rectangle } from 'electron';
 import { existsSync, rmSync, watch } from 'node:fs';
 import type { FSWatcher } from 'node:fs';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
 import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
 import {
   COMPANION_PROTOCOL_METHODS,
@@ -34,11 +36,18 @@ import type {
   ControlCenterModule,
   CreateReminderInput,
   CreateTaskInput,
+  DeclarativePluginFeedback,
+  DeclarativePluginFeedbackResult,
+  DeclarativePluginsConfig,
+  DeclarativePluginSummary,
   InputPermissionStatus,
   InteractionRulesConfig,
   ManualRenderSelection,
   PluginsConfig,
   ProfileCapabilityManifest,
+  PermissionPolicyConfig,
+  PermissionPolicySummary,
+  ProfilePackageManifest,
   ReminderNotification,
   ReminderPluginConfig,
   ShortcutBinding,
@@ -55,6 +64,7 @@ import type {
   PetProfileSummary,
   WindowControls
 } from '../shared/types';
+import { DeclarativePluginService } from './declarativePlugins';
 import { MacInputService } from './macInput';
 import { DEFAULT_REMINDER_PLUGIN_CONFIG, ReminderService } from './reminders';
 import { moduleForShortcutId, ShortcutService } from './shortcuts';
@@ -78,7 +88,10 @@ const PET_PROFILE_CHANGED_CHANNEL = 'pet-profile:changed';
 const CONTROL_CENTER_MODULE_CHANNEL = 'control-center:module';
 const SHORTCUTS_UPDATED_CHANNEL = 'shortcuts:updated';
 const INPUT_PERMISSION_STATUS_CHANNEL = 'input-permission:status';
+const INTERACTION_CLICK_CHANNEL = 'interaction:click';
 const INTERACTION_DRAG_ACTIVE_CHANNEL = 'interaction:drag-active';
+const DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL = 'plugin:feedback';
+const DECLARATIVE_PLUGINS_UPDATED_CHANNEL = 'plugin:updated';
 const MAX_MOUSE_HIT_REGIONS = 2400;
 const CONTROL_CENTER_WIDTH = 420;
 const CONTROL_CENTER_HEIGHT = 560;
@@ -87,10 +100,133 @@ const CONFIRMATION_MAX_TTL_MS = 300000;
 const CONFIRMATION_FEEDBACK_TTL_MS = 3000;
 const ACTIVITY_BUFFER_LIMIT = 50;
 const ACTIVITY_DEFAULT_LIMIT = 20;
-const V12_BLOCKED_INTERACTION_ACTIONS = [
+const DEFAULT_PERMISSION_POLICY_CONFIG: PermissionPolicyConfig = {
+  version: 1,
+  enabled: true,
+  rules: {
+    'companion.status': {
+      method: 'companion.status',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read app, profile, protocol, agent, confirmation and Codex status.'
+    },
+    'companion.react': {
+      method: 'companion.react',
+      group: 'display',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Trigger a short safe reaction on the companion.'
+    },
+    'companion.say': {
+      method: 'companion.say',
+      group: 'display',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Show a short validated companion message.'
+    },
+    'companion.agent.set_state': {
+      method: 'companion.agent.set_state',
+      group: 'agent_state',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Set the semantic agent state shown by the companion.'
+    },
+    'companion.agent.get_state': {
+      method: 'companion.agent.get_state',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read the current semantic agent state.'
+    },
+    'companion.agent.clear_state': {
+      method: 'companion.agent.clear_state',
+      group: 'agent_state',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Clear the current semantic agent state.'
+    },
+    'companion.confirm.request': {
+      method: 'companion.confirm.request',
+      group: 'confirmation',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Request a local user confirmation through the control center temporary UI.'
+    },
+    'companion.confirm.get': {
+      method: 'companion.confirm.get',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read the current or latest confirmation state.'
+    },
+    'companion.confirm.cancel': {
+      method: 'companion.confirm.cancel',
+      group: 'confirmation',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Cancel a pending confirmation request.'
+    },
+    'companion.context.summary': {
+      method: 'companion.context.summary',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read a safe companion context summary.'
+    },
+    'companion.activity.list': {
+      method: 'companion.activity.list',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read recent in-memory companion activity.'
+    },
+    'companion.permissions.summary': {
+      method: 'companion.permissions.summary',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read the current companion permission policy summary.'
+    },
+    'companion.plugins.summary': {
+      method: 'companion.plugins.summary',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read the safe declarative plugin runtime summary.'
+    },
+    'companion.profile.list': {
+      method: 'companion.profile.list',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'List available pet profiles and readiness.'
+    },
+    'companion.profile.capabilities': {
+      method: 'companion.profile.capabilities',
+      group: 'readonly',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Read a safe profile capability manifest.'
+    },
+    'companion.profile.select': {
+      method: 'companion.profile.select',
+      group: 'profile_change',
+      allowed: true,
+      requiresConfirmation: false,
+      description: 'Select a ready local pet profile.'
+    }
+  }
+};
+const V12_BLOCKED_INTERACTION_ACTIONS = [] as const;
+const V12_COMPLETED_INTERACTION_ACTIONS = [
+  'mouse_hover_look',
+  'mouse_shy_loop',
+  'mouse_leave_back',
   'click_head_happy',
   'click_body_confused',
   'drag_start_lift',
+  'drag_hold_lift',
   'drag_end_dizzy'
 ] as const;
 const DEFAULT_WINDOW_CONTROLS: WindowControls = {
@@ -103,6 +239,7 @@ const DEFAULT_CODEX_PLUGIN_CONFIG: CodexPluginConfig = {
   runtimeStatePath: '~/.desktop-ai-companion/runtime_state/codex_state.json',
   pollIntervalMs: 1000,
   thinkingTimeoutMs: 30000,
+  waitingAuthTimeoutMs: 60000,
   successHoldMs: 4000,
   errorHoldMs: 8000
 };
@@ -112,6 +249,18 @@ const DEFAULT_COMPANION_PROTOCOL_CONFIG: CompanionProtocolConfig = {
   socketPath: '~/.desktop-ai-companion/ipc/companion.sock',
   messageMaxChars: 80,
   cooldownMs: 1500,
+  defaultTtlMs: 6000,
+  maxTtlMs: 15000
+};
+const DEFAULT_DECLARATIVE_PLUGINS_CONFIG: DeclarativePluginsConfig = {
+  enabled: true,
+  builtinDirectory: 'data/plugins',
+  localDirectory: 'plugins',
+  toggleStateFile: 'plugin-overrides.json',
+  maxPlugins: 64,
+  schedulerIntervalMs: 1000,
+  minIntervalMs: 60000,
+  minCooldownMs: 15000,
   defaultTtlMs: 6000,
   maxTtlMs: 15000
 };
@@ -142,7 +291,13 @@ type CompanionActivityType =
   | 'agent_clear'
   | 'confirmation_request'
   | 'confirmation_result'
+  | 'profile_import'
+  | 'profile_remove'
   | 'profile_select'
+  | 'plugin_trigger'
+  | 'plugin_skip'
+  | 'plugin_error'
+  | 'permission_denied'
   | 'protocol_error';
 
 interface CompanionActivityEntry {
@@ -192,6 +347,8 @@ function resolveProjectRoot(): string {
 }
 
 const projectRoot = resolveProjectRoot();
+const execFileAsync = promisify(execFile);
+const INSTALLED_ASSET_PREFIX = '__installed_profiles__';
 let activeProfileId = 'legacy_real';
 let activeCompanionConfig: CompanionConfig | null = null;
 let mainWindowRef: BrowserWindow | null = null;
@@ -204,6 +361,7 @@ let codexRuntimeWatcher: FSWatcher | null = null;
 let codexRuntimePollTimer: NodeJS.Timeout | null = null;
 let codexRuntimeLastPayload = '';
 let companionProtocolConfig: CompanionProtocolConfig = { ...DEFAULT_COMPANION_PROTOCOL_CONFIG };
+let permissionPolicyConfig: PermissionPolicyConfig = structuredClone(DEFAULT_PERMISSION_POLICY_CONFIG);
 let companionProtocolServer: Server | null = null;
 let companionProtocolToken = '';
 let companionProtocolSocketPath = '';
@@ -227,6 +385,8 @@ let taskService: TaskService | null = null;
 let taskNotification: TaskNotification | null = null;
 let taskNotificationLastPayload = '';
 let taskPollTimer: NodeJS.Timeout | null = null;
+let declarativePluginsConfig: DeclarativePluginsConfig = { ...DEFAULT_DECLARATIVE_PLUGINS_CONFIG };
+let declarativePluginService: DeclarativePluginService | null = null;
 let manualRenderSelection: ManualRenderSelection | null = null;
 let shortcutService: ShortcutService | null = null;
 let macInputService: MacInputService | null = null;
@@ -235,6 +395,7 @@ let macInputDragPoint: { x: number; y: number } | null = null;
 let macInputDragging = false;
 let lastMouseHitCanInteract = false;
 let mouseHitRegions: Rectangle[] = [];
+let nativeClickCaptureEnabled = false;
 let windowDragActive = false;
 let windowIgnoringMouseEvents: boolean | null = null;
 let mouseHitTestPollTimer: NodeJS.Timeout | null = null;
@@ -253,12 +414,110 @@ async function readJsonPath<T>(path: string): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
-function resolveProfilePath(path: string): string {
-  return isAbsolute(path) ? path : resolveProjectPath(path);
+function installedProfilesRoot(): string {
+  return join(app.getPath('userData'), 'profiles');
+}
+
+function safePackageRelativePath(path: string): string {
+  const normalizedPath = normalize(path).replaceAll('\\', '/');
+  if (!path || isAbsolute(path) || normalizedPath === '..' || normalizedPath.startsWith('../')) {
+    throw new Error(`Invalid package-relative path: ${path}`);
+  }
+  return normalizedPath.startsWith('./') ? normalizedPath.slice(2) : normalizedPath;
+}
+
+function resolveProfilePath(profile: PetProfileDefinition, path: string): string {
+  if (isAbsolute(path)) {
+    return path;
+  }
+  if (!profile.packageRoot) {
+    return resolveProjectPath(path);
+  }
+  const relativePath = safePackageRelativePath(path);
+  const absolutePath = resolve(profile.packageRoot, relativePath);
+  const pathFromRoot = relative(profile.packageRoot, absolutePath);
+  if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
+    throw new Error(`Profile path escapes package root: ${path}`);
+  }
+  return absolutePath;
+}
+
+function installedAssetPath(profile: PetProfileDefinition, path: string): string {
+  return profile.packageRoot ? `${INSTALLED_ASSET_PREFIX}/${profile.id}/${safePackageRelativePath(path)}` : path;
+}
+
+async function readInstalledProfiles(): Promise<Record<string, PetProfileDefinition>> {
+  const root = installedProfilesRoot();
+  try {
+    const entries = await readdir(root, { withFileTypes: true });
+    const installedProfiles: Record<string, PetProfileDefinition> = {};
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name.startsWith('.')) {
+        continue;
+      }
+      const packageRoot = join(root, entry.name);
+      try {
+        const manifest = await readJsonPath<ProfilePackageManifest>(join(packageRoot, 'profile.package.json'));
+        if (manifest.schemaVersion !== 1 || manifest.profileId !== entry.name) {
+          throw new Error('package manifest id mismatch');
+        }
+        installedProfiles[manifest.profileId] = {
+          id: manifest.profileId,
+          label: manifest.label,
+          description: manifest.description,
+          companionConfigPath: safePackageRelativePath(manifest.entrypoints.companionConfig),
+          statesConfigPath: safePackageRelativePath(manifest.entrypoints.statesConfig),
+          actionRegistryPath: safePackageRelativePath(manifest.entrypoints.actionRegistry),
+          interactionRulesPath: manifest.entrypoints.interactionRules
+            ? safePackageRelativePath(manifest.entrypoints.interactionRules)
+            : undefined,
+          profileManifestPath: manifest.entrypoints.profileCapabilityManifest
+            ? safePackageRelativePath(manifest.entrypoints.profileCapabilityManifest)
+            : undefined,
+          motionCatalogPath: safePackageRelativePath(manifest.entrypoints.motionCatalog),
+          motionSourcesPath: safePackageRelativePath(manifest.entrypoints.motionSources),
+          actionProgressPath: safePackageRelativePath(manifest.qaSummaryPath),
+          qaRoot: '',
+          assetRoot: safePackageRelativePath(manifest.assetsRoot),
+          requiredAction: manifest.requiredAction,
+          locked: false,
+          packageRoot,
+          packageManifestPath: 'profile.package.json',
+          profileVersion: manifest.profileVersion,
+          source: 'installed'
+        };
+      } catch (error) {
+        console.warn(`Ignoring invalid installed profile: ${entry.name}`, error);
+      }
+    }
+    return installedProfiles;
+  } catch (error) {
+    if (isRecord(error) && error.code === 'ENOENT') {
+      return {};
+    }
+    throw error;
+  }
 }
 
 async function loadPetProfileConfig(): Promise<PetProfileConfig> {
-  return readJsonFile<PetProfileConfig>('data', 'config', 'pet_profiles.config.json');
+  const config = await readJsonFile<PetProfileConfig>('data', 'config', 'pet_profiles.config.json');
+  const builtins = Object.fromEntries(
+    Object.entries(config.profiles).map(([profileId, profile]) => [
+      profileId,
+      { ...profile, source: 'builtin' as const }
+    ])
+  );
+  const installed = await readInstalledProfiles();
+  for (const profileId of Object.keys(builtins)) {
+    delete installed[profileId];
+  }
+  return {
+    ...config,
+    profiles: {
+      ...builtins,
+      ...installed
+    }
+  };
 }
 
 function defaultPetProfileId(config: PetProfileConfig): string {
@@ -273,8 +532,8 @@ function profileDefinition(config: PetProfileConfig, profileId: string): PetProf
   return profile;
 }
 
-function hasRenderableActionAssets(action: { webmPath: string; fallbackPath: string }): boolean {
-  return existsSync(resolveProfilePath(action.webmPath)) && existsSync(resolveProfilePath(action.fallbackPath));
+function hasRenderableActionAssets(profile: PetProfileDefinition, action: { webmPath: string; fallbackPath: string }): boolean {
+  return existsSync(resolveProfilePath(profile, action.webmPath)) && existsSync(resolveProfilePath(profile, action.fallbackPath));
 }
 
 function materializeRegistryAvailability(
@@ -287,8 +546,16 @@ function materializeRegistryAvailability(
 
   const nextRegistry = structuredClone(registry);
   for (const action of Object.values(nextRegistry.actions)) {
-    action.available = Boolean(action.runtime && hasRenderableActionAssets(action));
+    action.available = Boolean(action.runtime && hasRenderableActionAssets(profile, action));
+    if (profile.packageRoot) {
+      action.path = installedAssetPath(profile, action.path);
+      action.sourceDir = installedAssetPath(profile, action.sourceDir);
+      action.webmPath = installedAssetPath(profile, action.webmPath);
+      action.fallbackPath = installedAssetPath(profile, action.fallbackPath);
+      action.sourceVideoPaths = action.sourceVideoPaths.map((path) => installedAssetPath(profile, path));
+    }
   }
+  nextRegistry.assetRoot = installedAssetPath(profile, nextRegistry.assetRoot);
   return nextRegistry;
 }
 
@@ -297,7 +564,7 @@ async function readProfileJson<T>(profile: PetProfileDefinition, key: keyof PetP
   if (typeof value !== 'string') {
     throw new Error(`Profile ${profile.id} is missing ${String(key)}.`);
   }
-  return readJsonPath<T>(resolveProfilePath(value));
+  return readJsonPath<T>(resolveProfilePath(profile, value));
 }
 
 function profileStatePath(): string {
@@ -323,7 +590,7 @@ async function loadSelectedProfile(): Promise<void> {
 
 async function profileReady(profile: PetProfileDefinition): Promise<boolean> {
   for (const key of ['companionConfigPath', 'statesConfigPath', 'actionRegistryPath'] as const) {
-    if (!existsSync(resolveProfilePath(profile[key]))) {
+    if (!existsSync(resolveProfilePath(profile, profile[key]))) {
       return false;
     }
   }
@@ -331,7 +598,7 @@ async function profileReady(profile: PetProfileDefinition): Promise<boolean> {
   try {
     const registry = await readProfileJson<ActionRegistryConfig>(profile, 'actionRegistryPath');
     const requiredAction = registry.actions[profile.requiredAction];
-    return Boolean(requiredAction && hasRenderableActionAssets(requiredAction));
+    return Boolean(requiredAction && hasRenderableActionAssets(profile, requiredAction));
   } catch {
     return false;
   }
@@ -339,6 +606,20 @@ async function profileReady(profile: PetProfileDefinition): Promise<boolean> {
 
 async function summarizeProfile(profile: PetProfileDefinition): Promise<PetProfileSummary> {
   const ready = await profileReady(profile);
+  let warnings: string[] = [];
+  let profileVersion = profile.profileVersion ?? null;
+  try {
+    const manifest = await readProfilePackageManifest(profile);
+    profileVersion = manifest.profileVersion;
+    if (manifest.missingSourceActions.length > 0) {
+      warnings.push(`${manifest.missingSourceActions.length} 个动作缺 source 视频`);
+    }
+    if (manifest.needsReplacementActions.length > 0) {
+      warnings.push(`${manifest.needsReplacementActions.length} 个动作等待替换视频`);
+    }
+  } catch {
+    warnings = [];
+  }
   return {
     id: profile.id,
     label: profile.label,
@@ -347,7 +628,11 @@ async function summarizeProfile(profile: PetProfileDefinition): Promise<PetProfi
     ready,
     reason: ready ? null : `等待 ${profile.requiredAction} 的 WebM 与 keyframe 到位`,
     assetRoot: profile.assetRoot,
-    requiredAction: profile.requiredAction
+    requiredAction: profile.requiredAction,
+    source: profile.source ?? 'builtin',
+    profileVersion,
+    warnings,
+    removable: profile.source === 'installed'
   };
 }
 
@@ -400,14 +685,21 @@ async function readActiveActionRegistryConfig(): Promise<ActionRegistryConfig> {
 async function readActiveInteractionRulesConfig(): Promise<InteractionRulesConfig> {
   const profile = await activeProfileDefinition();
   const rulesPath = profile.interactionRulesPath ?? 'data/config/interaction_rules.config.json';
-  return readJsonPath<InteractionRulesConfig>(resolveProfilePath(rulesPath));
+  return readJsonPath<InteractionRulesConfig>(resolveProfilePath(profile, rulesPath));
 }
 
 async function readProfileCapabilityManifest(profile: PetProfileDefinition): Promise<ProfileCapabilityManifest | null> {
   if (!profile.profileManifestPath) {
     return null;
   }
-  return readJsonPath<ProfileCapabilityManifest>(resolveProfilePath(profile.profileManifestPath));
+  return readJsonPath<ProfileCapabilityManifest>(resolveProfilePath(profile, profile.profileManifestPath));
+}
+
+async function readProfilePackageManifest(profile: PetProfileDefinition): Promise<ProfilePackageManifest> {
+  if (!profile.packageManifestPath) {
+    throw new Error(`Profile ${profile.id} is missing packageManifestPath.`);
+  }
+  return readJsonPath<ProfilePackageManifest>(resolveProfilePath(profile, profile.packageManifestPath));
 }
 
 function fallbackProfileCapabilityManifest(
@@ -440,6 +732,7 @@ function fallbackProfileCapabilityManifest(
       runtimeReadyActions: ready ? [profile.requiredAction] : [],
       missingSourceActions: [],
       blockedByVideoActions: [],
+      needsReplacementActions: [],
       videoLedgerPath: 'docs/10_video_supply_progress.md',
       actionProgressPath: profile.actionProgressPath
     },
@@ -499,6 +792,7 @@ async function profileCapabilitiesSummaryPayload(profileId: string): Promise<Rec
     readyInteractions: manifest.capabilities.interactions.ready,
     missingSourceActions: manifest.assets.missingSourceActions,
     blockedByVideoActions: manifest.assets.blockedByVideoActions,
+    needsReplacementActions: manifest.assets.needsReplacementActions,
     confirmationEntry: manifest.capabilities.confirmation.currentEntry,
     videoLedger: manifest.assets.videoLedgerPath
   };
@@ -592,6 +886,126 @@ function activityLimitFromParams(params: unknown): number {
   return limit;
 }
 
+function declarativePluginSummaryPayload(): DeclarativePluginSummary {
+  return (
+    declarativePluginService?.summary() ?? {
+      enabled: declarativePluginsConfig.enabled,
+      pluginCount: 0,
+      enabledCount: 0,
+      plugins: [],
+      recentErrors: []
+    }
+  );
+}
+
+function publishDeclarativePluginSummary(summary = declarativePluginSummaryPayload()): void {
+  sendToRendererWindows(DECLARATIVE_PLUGINS_UPDATED_CHANNEL, summary);
+}
+
+function declarativePluginBlockReason(): string | null {
+  if (reminderRuntimeState && !reminderRuntimeState.isStale) {
+    return 'reminder_active';
+  }
+  if (taskNotification && !taskNotification.isStale) {
+    return 'task_active';
+  }
+  if (agentRuntimeState && !agentRuntimeState.isStale) {
+    return 'agent_active';
+  }
+  if (codexRuntimeState && codexRuntimeState.state !== 'idle' && !codexRuntimeState.isStale) {
+    return 'codex_active';
+  }
+  if (windowDragActive) {
+    return 'user_drag_active';
+  }
+  return null;
+}
+
+async function declarativePluginRuntimeContext(): Promise<{
+  activeProfileId: string;
+  readyActions: string[];
+  blockReason: string | null;
+}> {
+  const registry = await readActiveActionRegistryConfig();
+  return {
+    activeProfileId,
+    readyActions: registry.actionOrder.filter((actionId) => {
+      const action = registry.actions[actionId];
+      return Boolean(action?.runtime && action.available && action.type !== 'fallback');
+    }),
+    blockReason: declarativePluginBlockReason()
+  };
+}
+
+function publishDeclarativePluginFeedback(feedback: DeclarativePluginFeedback): void {
+  const mainWindow = mainWindowRef;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    recordCompanionActivity('plugin_skip', `plugin skipped: ${feedback.pluginId}`, {
+      pluginId: feedback.pluginId,
+      reason: 'renderer_unavailable'
+    });
+    return;
+  }
+  mainWindow.webContents.send(DECLARATIVE_PLUGIN_FEEDBACK_CHANNEL, feedback);
+}
+
+async function startDeclarativePluginService(): Promise<void> {
+  declarativePluginsConfig = await loadDeclarativePluginsConfig();
+  declarativePluginService?.stop();
+  declarativePluginService = new DeclarativePluginService({
+    projectRoot,
+    userDataPath: app.getPath('userData'),
+    config: declarativePluginsConfig,
+    validateMessage: (message) =>
+      validateAgentMessage(message, { maxChars: companionProtocolConfig.messageMaxChars }),
+    getRuntimeContext: declarativePluginRuntimeContext,
+    onFeedback: publishDeclarativePluginFeedback,
+    onActivity: recordCompanionActivity,
+    onSummaryChanged: publishDeclarativePluginSummary
+  });
+  await declarativePluginService.start();
+  publishDeclarativePluginSummary();
+}
+
+function isDeclarativePluginFeedbackResult(value: unknown): value is DeclarativePluginFeedbackResult {
+  return (
+    isRecord(value) &&
+    typeof value.feedbackId === 'string' &&
+    typeof value.pluginId === 'string' &&
+    (value.status === 'accepted' || value.status === 'skipped' || value.status === 'interrupted') &&
+    (value.reason === null || typeof value.reason === 'string')
+  );
+}
+
+function registerDeclarativePluginHandlers(): void {
+  ipcMain.handle('plugins:get-summary', () => declarativePluginSummaryPayload());
+  ipcMain.handle('plugins:set-enabled', async (_event, pluginId: unknown, enabled: unknown) => {
+    if (typeof pluginId !== 'string' || typeof enabled !== 'boolean') {
+      throw new Error('Invalid plugin toggle.');
+    }
+    if (!declarativePluginService) {
+      throw new Error('Declarative plugin service is not ready.');
+    }
+    return declarativePluginService.setEnabled(pluginId, enabled);
+  });
+  ipcMain.handle('plugins:refresh', async () => {
+    if (!declarativePluginService) {
+      throw new Error('Declarative plugin service is not ready.');
+    }
+    return declarativePluginService.refresh();
+  });
+  ipcMain.on('plugins:feedback-result', (_event, result: unknown) => {
+    if (!isDeclarativePluginFeedbackResult(result) || result.status === 'accepted') {
+      return;
+    }
+    recordCompanionActivity('plugin_skip', `plugin ${result.status}: ${result.pluginId}`, {
+      pluginId: result.pluginId,
+      feedbackId: result.feedbackId,
+      reason: result.reason
+    });
+  });
+}
+
 function registerConfigHandlers(): void {
   ipcMain.handle('config:get-companion', () => readActiveCompanionConfig());
   ipcMain.handle('config:get-states', () => readActiveStatesConfig());
@@ -611,6 +1025,99 @@ function registerPetProfileHandlers(): void {
     }
     return selectPetProfile(profileId);
   });
+  ipcMain.handle('pet-profile:import', () => importPetProfile());
+  ipcMain.handle('pet-profile:remove', async (_event, profileId: unknown) => {
+    if (typeof profileId !== 'string') {
+      throw new Error('Invalid pet profile id.');
+    }
+    return removePetProfile(profileId);
+  });
+}
+
+async function runProfilePackageScript(args: string[]): Promise<Record<string, unknown>> {
+  const scriptPath = resolveProjectPath('scripts', 'profile_package.py');
+  try {
+    const { stdout } = await execFileAsync('python3', [scriptPath, ...args], {
+      cwd: projectRoot,
+      maxBuffer: 1024 * 1024
+    });
+    return JSON.parse(stdout) as Record<string, unknown>;
+  } catch (error) {
+    if (isRecord(error) && typeof error.stdout === 'string') {
+      try {
+        const payload = JSON.parse(error.stdout) as { error?: unknown };
+        if (typeof payload.error === 'string') {
+          throw new Error(payload.error);
+        }
+      } catch (parseError) {
+        if (parseError instanceof Error && parseError.message !== error.stdout) {
+          throw parseError;
+        }
+      }
+    }
+    throw error;
+  }
+}
+
+async function importPetProfile(): Promise<PetProfileState> {
+  const options: Electron.OpenDialogOptions = {
+    title: '导入桌宠角色包',
+    properties: ['openFile'],
+    filters: [
+      { name: 'Desktop AI Companion Profile', extensions: ['zip'] }
+    ]
+  };
+  const selection = controlCenterWindowRef
+    ? await dialog.showOpenDialog(controlCenterWindowRef, options)
+    : await dialog.showOpenDialog(options);
+  if (selection.canceled || selection.filePaths.length === 0) {
+    return petProfileState();
+  }
+
+  const builtinConfig = await readJsonFile<PetProfileConfig>('data', 'config', 'pet_profiles.config.json');
+  const args = [
+    'install',
+    '--package',
+    selection.filePaths[0],
+    '--install-root',
+    installedProfilesRoot()
+  ];
+  for (const profileId of Object.keys(builtinConfig.profiles)) {
+    args.push('--reserved-profile', profileId);
+  }
+  const result = await runProfilePackageScript(args);
+  const state = await petProfileState();
+  publishPetProfileState(state);
+  recordCompanionActivity('profile_import', `profile imported: ${String(result.profileId ?? 'unknown')}`, {
+    profileId: String(result.profileId ?? 'unknown'),
+    ready: true
+  });
+  return state;
+}
+
+async function removePetProfile(profileId: string): Promise<PetProfileState> {
+  const config = await loadPetProfileConfig();
+  const profile = config.profiles[profileId];
+  if (!profile) {
+    throw new Error(`Unknown pet profile: ${profileId}`);
+  }
+  if (profile.source !== 'installed' || !profile.packageRoot) {
+    throw new Error('Built-in profiles cannot be removed.');
+  }
+  if (activeProfileId === profileId) {
+    activeProfileId = defaultPetProfileId(config);
+    activeCompanionConfig = await readActiveCompanionConfig();
+    manualRenderSelection = null;
+    await saveSelectedProfile();
+    publishManualRenderSelection();
+  }
+  await rm(profile.packageRoot, { recursive: true, force: true });
+  const state = await petProfileState();
+  publishPetProfileState(state);
+  recordCompanionActivity('profile_remove', `profile removed: ${profileId}`, {
+    profileId
+  });
+  return state;
 }
 
 async function selectPetProfile(profileId: string): Promise<PetProfileState> {
@@ -626,6 +1133,7 @@ async function selectPetProfile(profileId: string): Promise<PetProfileState> {
   activeProfileId = profile.id;
   activeCompanionConfig = await readActiveCompanionConfig();
   manualRenderSelection = null;
+  declarativePluginService?.noteBusy();
   await saveSelectedProfile();
   publishManualRenderSelection();
 
@@ -661,6 +1169,36 @@ async function loadCompanionProtocolConfig(): Promise<CompanionProtocolConfig> {
   } catch (error) {
     console.warn('Failed to load companion protocol config; using defaults.', error);
     return { ...DEFAULT_COMPANION_PROTOCOL_CONFIG };
+  }
+}
+
+async function loadDeclarativePluginsConfig(): Promise<DeclarativePluginsConfig> {
+  try {
+    const pluginsConfig = await readJsonFile<PluginsConfig>('data', 'config', 'plugins.config.json');
+    return {
+      ...DEFAULT_DECLARATIVE_PLUGINS_CONFIG,
+      ...pluginsConfig.plugins.declarative_plugins
+    };
+  } catch (error) {
+    console.warn('Failed to load declarative plugins config; using defaults.', error);
+    return { ...DEFAULT_DECLARATIVE_PLUGINS_CONFIG };
+  }
+}
+
+async function loadPermissionPolicyConfig(): Promise<PermissionPolicyConfig> {
+  try {
+    const policy = await readJsonFile<PermissionPolicyConfig>('data', 'config', 'permission_policy.config.json');
+    return {
+      ...DEFAULT_PERMISSION_POLICY_CONFIG,
+      ...policy,
+      rules: {
+        ...DEFAULT_PERMISSION_POLICY_CONFIG.rules,
+        ...policy.rules
+      }
+    };
+  } catch (error) {
+    console.warn('Failed to load permission policy config; using defaults.', error);
+    return structuredClone(DEFAULT_PERMISSION_POLICY_CONFIG);
   }
 }
 
@@ -910,6 +1448,14 @@ function registerWindowControlHandlers(): void {
   ipcMain.handle('window:set-mouse-hit-regions', (_event, regions: unknown) => {
     setMouseHitRegions(regions);
   });
+  ipcMain.handle('window:set-native-click-capture', (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      return;
+    }
+
+    nativeClickCaptureEnabled = enabled;
+    macInputService?.setClickCaptureEnabled(enabled);
+  });
   ipcMain.handle('window:set-drag-active', (_event, active: unknown) => {
     if (!mainWindowRef || typeof active !== 'boolean') {
       return;
@@ -917,6 +1463,7 @@ function registerWindowControlHandlers(): void {
 
     windowDragActive = active;
     if (active) {
+      declarativePluginService?.noteBusy();
       setWindowMouseIgnore(mainWindowRef, false);
     } else {
       pollMouseHitTest();
@@ -957,6 +1504,15 @@ function publishManualRenderSelection(): void {
 
 function publishInteractionDragActive(active: boolean): void {
   sendToRendererWindows(INTERACTION_DRAG_ACTIVE_CHANNEL, active);
+}
+
+function publishInteractionClick(x: number, y: number): void {
+  const mainWindow = mainWindowRef;
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.webContents.send(INTERACTION_CLICK_CHANNEL, { x, y });
 }
 
 function registerManualRenderHandlers(): void {
@@ -1005,6 +1561,10 @@ function publishAgentRuntimeState(nextState: AgentRenderState | null): void {
 
   agentRuntimeState = nextState;
   agentRuntimeLastPayload = payload;
+  if (nextState) {
+    declarativePluginService?.noteBusy();
+  }
+  declarativePluginService?.notifyCondition('agent.status', nextState?.status ?? 'idle');
   sendToRendererWindows(AGENT_RUNTIME_STATE_CHANNEL, nextState);
   publishCompanionProtocolStatus();
 }
@@ -1177,6 +1737,72 @@ function assertAgentCooldown(): void {
   lastAgentMutationAt = Date.now();
 }
 
+function permissionPolicySummaryPayload(): PermissionPolicySummary {
+  const groupCounts: PermissionPolicySummary['groupCounts'] = {};
+  const blockedMethods: string[] = [];
+  const confirmationRequiredMethods: string[] = [];
+
+  for (const method of COMPANION_PROTOCOL_METHODS) {
+    const rule = permissionPolicyConfig.rules[method];
+    if (!rule) {
+      blockedMethods.push(method);
+      continue;
+    }
+
+    groupCounts[rule.group] = (groupCounts[rule.group] ?? 0) + 1;
+    if (!rule.allowed) {
+      blockedMethods.push(method);
+    }
+    if (rule.requiresConfirmation) {
+      confirmationRequiredMethods.push(method);
+    }
+  }
+
+  return {
+    enabled: permissionPolicyConfig.enabled,
+    version: permissionPolicyConfig.version,
+    groupCounts,
+    blockedMethods,
+    confirmationRequiredMethods
+  };
+}
+
+function permissionPolicyPayload(): Record<string, unknown> {
+  return {
+    summary: permissionPolicySummaryPayload(),
+    rules: COMPANION_PROTOCOL_METHODS.map((method) => {
+      const rule = permissionPolicyConfig.rules[method];
+      return {
+        method,
+        group: rule?.group ?? 'readonly',
+        allowed: Boolean(rule?.allowed),
+        requiresConfirmation: Boolean(rule?.requiresConfirmation),
+        description: rule?.description ?? 'Missing permission policy rule.'
+      };
+    })
+  };
+}
+
+function assertCompanionProtocolPermission(method: string): void {
+  if (!permissionPolicyConfig.enabled) {
+    return;
+  }
+  if (!COMPANION_PROTOCOL_METHODS.includes(method as (typeof COMPANION_PROTOCOL_METHODS)[number])) {
+    throw new Error(`unknown method: ${method}`);
+  }
+
+  const rule = permissionPolicyConfig.rules[method];
+  if (!rule) {
+    throw new Error(`permission policy missing method: ${method}`);
+  }
+  if (!rule.allowed) {
+    throw new Error(`permission denied: ${method}`);
+  }
+  if (rule.requiresConfirmation) {
+    throw new Error(`permission requires confirmation: ${method}`);
+  }
+}
+
 function companionProtocolStatus(): CompanionProtocolStatus {
   return {
     enabled: companionProtocolConfig.enabled,
@@ -1189,6 +1815,7 @@ function companionProtocolStatus(): CompanionProtocolStatus {
     methods: [...COMPANION_PROTOCOL_METHODS],
     agentState: agentRuntimeState,
     confirmation: agentConfirmation,
+    permissionPolicy: permissionPolicySummaryPayload(),
     lastError: companionProtocolLastError
   };
 }
@@ -1208,7 +1835,8 @@ async function protocolStatusPayload(): Promise<Record<string, unknown>> {
     agentState: agentRuntimeState,
     confirmation: agentConfirmation,
     codexState: codexRuntimeState,
-    methods: [...COMPANION_PROTOCOL_METHODS]
+    methods: [...COMPANION_PROTOCOL_METHODS],
+    permissionPolicy: permissionPolicySummaryPayload()
   };
 }
 
@@ -1281,12 +1909,14 @@ async function contextSummaryPayload(): Promise<Record<string, unknown>> {
     codexState: safeCodexSummary(),
     methods: [...COMPANION_PROTOCOL_METHODS],
     profileCapabilitiesSummary,
+    permissionPolicySummary: permissionPolicySummaryPayload(),
+    pluginSummary: declarativePluginSummaryPayload(),
     videoSupply: {
       ledger: 'docs/10_video_supply_progress.md',
       generatedDetail: 'docs/generated/profiles/guofeng_ai/action_progress.md',
       v12BlockedProfile: 'guofeng_ai',
       v12BlockedActions: [...V12_BLOCKED_INTERACTION_ACTIONS],
-      completedInteractionActions: ['mouse_hover_look', 'mouse_shy_loop', 'mouse_leave_back', 'drag_hold_lift']
+      completedInteractionActions: [...V12_COMPLETED_INTERACTION_ACTIONS]
     }
   };
 }
@@ -1443,6 +2073,14 @@ async function handleCompanionProtocolMethod(method: string, params: unknown): P
     return activityListPayload(params);
   }
 
+  if (method === 'companion.permissions.summary') {
+    return permissionPolicyPayload();
+  }
+
+  if (method === 'companion.plugins.summary') {
+    return declarativePluginSummaryPayload();
+  }
+
   if (method === 'companion.profile.list') {
     return petProfileState();
   }
@@ -1509,11 +2147,15 @@ async function handleProtocolRequest(rawLine: string, socket: Socket): Promise<v
   }
 
   try {
+    assertCompanionProtocolPermission(method);
     const result = await handleCompanionProtocolMethod(method, request.params);
     socket.write(protocolResponse(id, true, result));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'request failed';
-    recordCompanionActivity('protocol_error', message, {
+    const activityType = message.startsWith('permission denied') || message.startsWith('permission requires')
+      ? 'permission_denied'
+      : 'protocol_error';
+    recordCompanionActivity(activityType, message, {
       method
     });
     socket.write(protocolResponse(id, false, message));
@@ -1564,6 +2206,7 @@ async function writeCompanionProtocolDiscovery(): Promise<void> {
 
 async function startCompanionProtocolService(): Promise<void> {
   companionProtocolConfig = await loadCompanionProtocolConfig();
+  permissionPolicyConfig = await loadPermissionPolicyConfig();
   companionProtocolSocketPath = resolveRuntimePath(companionProtocolConfig.socketPath);
   companionProtocolDiscoveryPath = resolveRuntimePath(companionProtocolConfig.discoveryPath);
   companionProtocolLastError = null;
@@ -1634,7 +2277,7 @@ function publishInputPermissionStatus(status: InputPermissionStatus): void {
 }
 
 function controlCenterModuleFromUnknown(value: unknown): ControlCenterModule {
-  return value === 'tasks' || value === 'reminders' || value === 'settings' || value === 'integrations' || value === 'status'
+  return value === 'tasks' || value === 'reminders' || value === 'settings' || value === 'integrations' || value === 'plugins' || value === 'status'
     ? value
     : 'status';
 }
@@ -1814,6 +2457,16 @@ function handleMacInputEvent(event: { type: string; x?: number; y?: number }): v
     return;
   }
 
+  if (event.type === 'leftClick') {
+    const bounds = mainWindow.getContentBounds();
+    const localX = event.x - bounds.x;
+    const localY = event.y - bounds.y;
+    if (localX >= 0 && localX <= bounds.width && localY >= 0 && localY <= bounds.height) {
+      publishInteractionClick(localX, localY);
+    }
+    return;
+  }
+
   if (event.type === 'leftDragged' && macInputDragPoint) {
     if (!macInputDragging) {
       macInputDragging = true;
@@ -1851,6 +2504,7 @@ function startMacInputService(): void {
     publishInputPermissionStatus
   );
   macInputService.start(shortcutService?.interactionModifier() ?? 'Option');
+  macInputService.setClickCaptureEnabled(nativeClickCaptureEnabled);
 }
 
 function parseCodexRuntimeState(raw: unknown): CodexRuntimeState | null {
@@ -1923,6 +2577,15 @@ function normalizeCodexRuntimeState(raw: CodexRuntimeState, now = Date.now()): C
     return idleCodexRenderState(raw, true);
   }
 
+  if (
+    raw.state === 'waiting_auth' &&
+    rawTimestampMs !== null &&
+    !raw.expiresAt &&
+    rawTimestampMs + codexPluginConfig.waitingAuthTimeoutMs <= now
+  ) {
+    return idleCodexRenderState(raw, true);
+  }
+
   const state =
     raw.state === 'coding' &&
     rawTimestampMs !== null &&
@@ -1953,6 +2616,10 @@ function publishCodexRuntimeState(nextState: CodexRenderState | null): void {
 
   codexRuntimeState = nextState;
   codexRuntimeLastPayload = payload;
+  if (nextState && nextState.state !== 'idle') {
+    declarativePluginService?.noteBusy();
+  }
+  declarativePluginService?.notifyCondition('codex.state', nextState?.state ?? 'idle');
 
   sendToRendererWindows(CODEX_RUNTIME_STATE_CHANNEL, nextState);
 
@@ -2045,6 +2712,9 @@ function publishReminderRuntimeState(nextState: ReminderNotification | null): vo
 
   reminderRuntimeState = nextState;
   reminderRuntimeLastPayload = payload;
+  if (nextState) {
+    declarativePluginService?.noteBusy();
+  }
 
   sendToRendererWindows(REMINDER_RUNTIME_STATE_CHANNEL, nextState);
 }
@@ -2235,6 +2905,9 @@ function publishTaskNotification(nextNotification: TaskNotification | null): voi
 
   taskNotification = nextNotification;
   taskNotificationLastPayload = payload;
+  if (nextNotification) {
+    declarativePluginService?.noteBusy();
+  }
 
   sendToRendererWindows(TASK_NOTIFICATION_CHANNEL, nextNotification);
 }
@@ -2389,14 +3062,30 @@ function registerAssetProtocol(): void {
     const requestUrl = new URL(request.url);
     const rawRelativePath = decodeURIComponent(`${requestUrl.hostname}${requestUrl.pathname}`);
     const relativePath = normalize(rawRelativePath).replace(/^(\.\.(\/|\\|$))+/, '').replace(/^(\/|\\)+/, '');
-    const absolutePath = resolve(projectRoot, relativePath);
-    const pathFromRoot = relative(projectRoot, absolutePath);
+    const installedPrefix = `${INSTALLED_ASSET_PREFIX}/`;
+    let assetRoot = projectRoot;
+    let assetPath = relativePath;
+    if (relativePath.startsWith(installedPrefix)) {
+      const installedPath = relativePath.slice(installedPrefix.length);
+      const separatorIndex = installedPath.indexOf('/');
+      if (separatorIndex <= 0) {
+        return new Response('Invalid installed asset path', { status: 400 });
+      }
+      const profileId = installedPath.slice(0, separatorIndex);
+      if (!/^[a-zA-Z0-9_-]+$/.test(profileId)) {
+        return new Response('Invalid installed profile id', { status: 400 });
+      }
+      assetRoot = join(installedProfilesRoot(), profileId);
+      assetPath = installedPath.slice(separatorIndex + 1);
+    }
+    const absolutePath = resolve(assetRoot, assetPath);
+    const pathFromRoot = relative(assetRoot, absolutePath);
 
     if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot)) {
       return new Response('Invalid asset path', { status: 400 });
     }
     if (!existsSync(absolutePath)) {
-      console.warn(`Asset not found: ${relativePath} -> ${absolutePath}`);
+      console.warn(`Asset not found: ${relativePath}`);
       return new Response('Asset not found', { status: 404 });
     }
 
@@ -2524,6 +3213,7 @@ app.whenReady().then(async () => {
   registerShortcutHandlers();
   registerCodexRuntimeHandlers();
   registerCompanionProtocolHandlers();
+  registerDeclarativePluginHandlers();
   registerReminderHandlers();
   registerTaskHandlers();
   registerAssetProtocol();
@@ -2534,6 +3224,7 @@ app.whenReady().then(async () => {
   await startCompanionProtocolService();
   await startReminderService();
   await createMainWindow();
+  await startDeclarativePluginService();
   registerShortcuts();
   startMacInputService();
   syncMacInputHitRegions();
@@ -2554,6 +3245,7 @@ app.on('will-quit', () => {
     clearInterval(codexRuntimePollTimer);
   }
   stopCompanionProtocolServiceSync();
+  declarativePluginService?.stop();
   if (reminderPollTimer) {
     clearInterval(reminderPollTimer);
   }

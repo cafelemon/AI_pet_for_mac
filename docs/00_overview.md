@@ -1,7 +1,7 @@
 # Desktop AI Companion Overview
 
-更新时间：2026-05-31
-当前版本：`V1.1.8`
+更新时间：2026-06-01
+当前版本：`V1.3.0`
 基线冻结版本：`V1.0.0`
 
 ## 项目定位
@@ -56,6 +56,32 @@ Desktop AI Companion 是一个本地桌面 AI 伙伴项目。当前形态是 Ele
 
 `V1.1.8` 实施 L5 最小 profile 能力声明：外部 agent 可以通过 `companion.profile.capabilities` 读取当前或指定 profile 的可用动作、缺 source 动作、视频阻塞项、MCP 层级和分发/开源预留边界。该版本不生成新视频，不把 click/drag placeholder 标记为 runtime ready。L4 事件流 `companion.events.subscribe` 明确尚未实现，后续单独推进。
 
+## V1.1.9 MCP Permission Policy
+
+`V1.1.9` 实施 L5 最小权限治理层：外部 agent 可以通过 `companion.permissions.summary` 读取 MCP 方法的风险分层、allow/deny 状态和确认要求。默认策略不阻断既有能力，只把 `readonly / display / agent_state / confirmation / profile_change` 边界配置化，为后续插件、偏好和 App Store/开源权限说明打基础。
+
+## V1.2.0 用户交互动作补全
+
+`V1.2.0` 补齐 `guofeng_ai` 的 click/drag 用户交互动作用于真实 runtime：点击头部触发 `click_head_happy`，点击身体触发 `click_body_confused`，拖拽链路使用 `drag_start_lift -> drag_hold_lift -> drag_end_dizzy`。两个拖动衔接态在透明 WebM 输出阶段使用 `2.0x` 加速，并按 `idle -> drag_start -> drag_hold -> drag_end -> idle` 的首尾帧实际大小和位置做链式对齐。
+
+## V1.2.1 Codex 授权提示修复
+
+`V1.2.1` 区分 Codex 自身 PermissionRequest 和 MCP confirmation：前者提示用户在 Codex 中确认授权，不生成控制中心卡片；后者仍由 `companion.confirm.request` 打开控制中心临时确认入口。Codex `waiting_auth` 增加 60 秒过期清理，避免重启后残留旧授权提示。
+
+## V1.2.2 原生点击命中与拖动节奏
+
+`V1.2.2` 使用 macOS 原生 input helper 精准拦截人物 alpha 区域内的普通左键，避免点击穿透到桌面；透明区域继续穿透。普通点击触发头部/身体反馈，Option 仅用于抓起拖动。`drag_start_lift` 提升为 `6.0x`，`mouse_leave_back` 暂时保留运行但标记为待替换素材。
+
+## V1.2.3 头部实体命中校准
+
+`V1.2.3` 为 `guofeng_ai` 增加 profile-scoped 点击区域配置：头部使用人物实体 bbox 顶部 `34%`，轮廓增加 `10px` 容差；动作切换时保留上一帧有效 regions，避免害羞切换瞬间头部不可点。拖动开始时不再播放起始衔接态，直接进入 `drag_hold_lift` 循环；释放后仍播放 `drag_end_dizzy` 收尾。
+
+## V1.3.0 本地 Profile Package
+
+`V1.3.0` 将角色从仓库内部配置升级为本地包：内置角色可导出为 `.companion-profile.zip`，控制中心可导入和移除非内置角色。包内 manifest 声明 runtime 配置、资产入口、QA summary、license/provenance、缺 source 动作和待替换视频。缺非核心视频只形成 warning，不生成占位素材；缺少 `idle` 或必需配置时禁止切换。
+
+`V1.4.0` 新增声明式插件运行时：内置与本地插件只通过 JSON manifest 声明 interval、idle、condition trigger 和 speech、reaction、random action 展示反馈。Electron main 负责白名单校验、调度、cooldown、TTL、启停持久化与 activity 记录；renderer 只接收验证后的低优先级反馈。插件不执行任意脚本，不访问网络，不写入插件文件。
+
 ## 当前核心资产
 
 - 默认 profile：`legacy_real`
@@ -63,10 +89,12 @@ Desktop AI Companion 是一个本地桌面 AI 伙伴项目。当前形态是 Ele
 - 已完成基础动作：`idle`、`reading`、`coding`、`thinking`、`success`、`error`、`reminder`、`sleep`
 - 已完成姿态动作：`duck_sit_idle`、`duck_sit_head_hair`、`duck_sit_finger_lip`、`duck_sit_stretch`
 - 已完成桥接动作：`stand_to_duck_sit`、`duck_sit_to_stand`、`duck_sit_to_sleep`、`sleep_to_stand`
-- 待补素材：站立到阅读/工作/思考的双向桥接，以及 P1-A click/drag 用户交互动作为 source video
+- 待补素材：站立到阅读/工作/思考的双向桥接，以及非 V1.2 主线的长期动作补充
 - MCP 能力蓝图：`docs/09_mcp_capability_blueprint.md`
 - 视频供给台账：`docs/10_video_supply_progress.md`
 - profile 能力声明：`data/profiles/<profile>/profile_manifest.config.json`
+- profile package 声明：`data/profiles/<profile>/profile_package.config.json`
+- MCP 权限策略：`data/config/permission_policy.config.json`
 
 ## 文档索引
 

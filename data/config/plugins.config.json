@@ -5,6 +5,7 @@
       "runtimeStatePath": "~/.desktop-ai-companion/runtime_state/codex_state.json",
       "pollIntervalMs": 1000,
       "thinkingTimeoutMs": 30000,
+      "waitingAuthTimeoutMs": 60000,
       "successHoldMs": 4000,
       "errorHoldMs": 8000
     },
@@ -14,6 +15,18 @@
       "socketPath": "~/.desktop-ai-companion/ipc/companion.sock",
       "messageMaxChars": 80,
       "cooldownMs": 1500,
+      "defaultTtlMs": 6000,
+      "maxTtlMs": 15000
+    },
+    "declarative_plugins": {
+      "enabled": true,
+      "builtinDirectory": "data/plugins",
+      "localDirectory": "plugins",
+      "toggleStateFile": "plugin-overrides.json",
+      "maxPlugins": 64,
+      "schedulerIntervalMs": 1000,
+      "minIntervalMs": 60000,
+      "minCooldownMs": 15000,
       "defaultTtlMs": 6000,
       "maxTtlMs": 15000
     },

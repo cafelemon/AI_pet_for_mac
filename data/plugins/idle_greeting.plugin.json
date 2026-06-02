@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "id": "idle_greeting",
+  "version": "1.0.0",
+  "label": "空闲问候",
+  "description": "桌宠空闲一段时间后，用一条短消息轻声问候。",
+  "enabledByDefault": false,
+  "permissions": [
+    "display.speech"
+  ],
+  "cooldownMs": 300000,
+  "triggers": [
+    {
+      "type": "idle",
+      "idleMs": 120000,
+      "repeatIntervalMs": 300000
+    }
+  ],
+  "effects": [
+    {
+      "type": "speech_pool",
+      "messages": [
+        "休息一下也很好",
+        "我在这里陪你",
+        "慢慢来，不着急"
+      ],
+      "ttlMs": 6000
+    }
+  ]
+}

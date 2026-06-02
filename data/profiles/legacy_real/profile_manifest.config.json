@@ -34,6 +34,7 @@
     ],
     "missingSourceActions": [],
     "blockedByVideoActions": [],
+    "needsReplacementActions": [],
     "videoLedgerPath": "docs/10_video_supply_progress.md",
     "actionProgressPath": "docs/generated/profiles/legacy_real/action_progress.md"
   },

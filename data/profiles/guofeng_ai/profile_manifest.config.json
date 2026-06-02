@@ -3,7 +3,7 @@
   "profileId": "guofeng_ai",
   "label": "古风 AI 角色",
   "stage": "in_progress",
-  "summary": "古风 AI 角色 profile，已具备基础状态、MCP 状态表达、确认流临时入口和鼠标靠近害羞交互；click/drag 四条 V1.2 动作等待视频源。",
+  "summary": "古风 AI 角色 profile，已具备基础状态、MCP 状态表达、确认流临时入口和完整 click/drag 交互；mouse_leave_back 当前临时可运行但等待替换视频。",
   "capabilities": {
     "mcpLayers": [
       "L1_basic_remote_control",
@@ -35,20 +35,14 @@
         "mouse_hover_look",
         "mouse_shy_loop",
         "mouse_leave_back",
-        "drag_hold_lift"
-      ],
-      "missingSource": [
         "click_head_happy",
         "click_body_confused",
         "drag_start_lift",
+        "drag_hold_lift",
         "drag_end_dizzy"
       ],
-      "blockedByVideo": [
-        "click_head_happy",
-        "click_body_confused",
-        "drag_start_lift",
-        "drag_end_dizzy"
-      ]
+      "missingSource": [],
+      "blockedByVideo": []
     },
     "confirmation": {
       "currentEntry": "control_center_temp",
@@ -68,19 +62,36 @@
       "mouse_hover_look",
       "mouse_shy_loop",
       "mouse_leave_back",
-      "drag_hold_lift"
+      "click_head_happy",
+      "click_body_confused",
+      "drag_start_lift",
+      "drag_hold_lift",
+      "drag_end_dizzy"
     ],
     "missingSourceActions": [
-      "click_head_happy",
-      "click_body_confused",
-      "drag_start_lift",
-      "drag_end_dizzy"
+      "reading",
+      "success",
+      "error",
+      "reminder",
+      "duck_sit_head_hair",
+      "duck_sit_finger_lip",
+      "duck_sit_stretch",
+      "stand_to_duck_sit",
+      "duck_sit_to_stand",
+      "duck_sit_to_sleep",
+      "sleep_to_stand",
+      "idle_yawn",
+      "idle_hair",
+      "stand_to_reading",
+      "reading_to_stand",
+      "stand_to_coding",
+      "coding_to_stand",
+      "stand_to_thinking",
+      "thinking_to_stand"
     ],
-    "blockedByVideoActions": [
-      "click_head_happy",
-      "click_body_confused",
-      "drag_start_lift",
-      "drag_end_dizzy"
+    "blockedByVideoActions": [],
+    "needsReplacementActions": [
+      "mouse_leave_back"
     ],
     "videoLedgerPath": "docs/10_video_supply_progress.md",
     "actionProgressPath": "docs/generated/profiles/guofeng_ai/action_progress.md"

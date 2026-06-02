@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, ReactElement } from 'react';
+import type { FormEvent, PointerEvent, ReactElement } from 'react';
 
 import { Bubble } from '../components/Bubble';
 import { Companion } from '../components/Companion';
@@ -21,6 +21,8 @@ import type {
   ControlCenterModule,
   CreateReminderInput,
   CreateTaskInput,
+  DeclarativePluginFeedback,
+  DeclarativePluginSummary,
   InputPermissionStatus,
   InteractionEventName,
   InteractionRule,
@@ -28,6 +30,7 @@ import type {
   KeyframeDescriptor,
   ManualRenderSelection,
   MouseHitRegion,
+  MouseHitTestPoint,
   PetProfileState,
   ReminderNotification,
   ReminderRecord,
@@ -102,7 +105,6 @@ const STAND_TO_CODING = 'stand_to_coding';
 const CODING_TO_STAND = 'coding_to_stand';
 const STAND_TO_THINKING = 'stand_to_thinking';
 const THINKING_TO_STAND = 'thinking_to_stand';
-const DRAG_START_EVENT: InteractionEventName = 'drag_start';
 const DRAG_HOLD_EVENT: InteractionEventName = 'drag_hold';
 const DRAG_END_EVENT: InteractionEventName = 'drag_end';
 const SLEEP_ENTRY_FROM_STANDING = [STAND_TO_DUCK_SIT, DUCK_SIT_TO_SLEEP];
@@ -117,6 +119,7 @@ const EMPTY_TASK_SNAPSHOT: TaskCenterSnapshot = {
 const MODULE_LABELS: Record<ControlCenterModule, string> = {
   status: '状态',
   integrations: 'AI 接入',
+  plugins: '插件',
   tasks: '任务',
   reminders: '提醒',
   settings: '设置'
@@ -127,6 +130,16 @@ const RUNTIME_SOURCE_PRIORITY = {
   agent: 1,
   codex: 2
 } as const;
+const PLUGIN_REACTION_TO_STATE: Record<string, CompanionState> = {
+  idle: 'idle',
+  reset: 'idle',
+  thinking: 'thinking',
+  editing: 'coding',
+  coding: 'coding',
+  waiting: 'reminder',
+  success: 'success',
+  error: 'error'
+};
 
 type IdlePosture = 'standing' | 'duck_sit';
 
@@ -303,6 +316,33 @@ function interactionAction(rules: InteractionRulesConfig | null, eventName: Inte
   return rules.rules[eventName]?.action ?? null;
 }
 
+function unionHitRegionBounds(regions: MouseHitRegion[]): MouseHitRegion | null {
+  if (regions.length === 0) {
+    return null;
+  }
+
+  const left = Math.min(...regions.map((region) => region.x));
+  const top = Math.min(...regions.map((region) => region.y));
+  const right = Math.max(...regions.map((region) => region.x + region.width));
+  const bottom = Math.max(...regions.map((region) => region.y + region.height));
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top)
+  };
+}
+
+function pointInHitRegions(x: number, y: number, regions: MouseHitRegion[], padding = 0): boolean {
+  return regions.some(
+    (region) =>
+      x >= region.x - padding &&
+      x <= region.x + region.width + padding &&
+      y >= region.y - padding &&
+      y <= region.y + region.height + padding
+  );
+}
+
 function canInterruptRuntime(rule: InteractionRule | undefined, runtimeOverride: unknown): boolean {
   if (!rule) {
     return false;
@@ -334,7 +374,7 @@ function renderedStateForMotion(folder: string | null, desiredState: CompanionSt
 
 function moduleFromSearch(): ControlCenterModule {
   const module = new URLSearchParams(window.location.search).get('module');
-  return module === 'tasks' || module === 'reminders' || module === 'settings' || module === 'integrations' || module === 'status'
+  return module === 'tasks' || module === 'reminders' || module === 'settings' || module === 'integrations' || module === 'plugins' || module === 'status'
     ? module
     : 'status';
 }
@@ -433,6 +473,7 @@ function PetRenderer({
   agentState,
   reminderState,
   taskNotification,
+  pluginFeedback,
   interactionDragActive,
   interactionRules,
   keyframes,
@@ -446,6 +487,7 @@ function PetRenderer({
   agentState: AgentRenderState | null;
   reminderState: ReminderNotification | null;
   taskNotification: TaskNotification | null;
+  pluginFeedback: DeclarativePluginFeedback | null;
   interactionDragActive: boolean;
   interactionRules: InteractionRulesConfig | null;
   keyframes: KeyframeDescriptor[];
@@ -454,13 +496,16 @@ function PetRenderer({
 }): ReactElement | null {
   const [idleMotionFolder, setIdleMotionFolder] = useState<string | null>(null);
   const [interactionMotionFolder, setInteractionMotionFolder] = useState<string | null>(null);
+  const [activePluginFeedback, setActivePluginFeedback] = useState<DeclarativePluginFeedback | null>(null);
   const [idlePosture, setIdlePosture] = useState<IdlePosture>('standing');
   const [autoSleep, setAutoSleep] = useState(false);
   const idleMotionTimerRef = useRef<number | null>(null);
   const motionQueueRef = useRef<string[]>([]);
+  const hitRegionsRef = useRef<MouseHitRegion[]>([]);
   const previousDesiredStateRef = useRef<CompanionState | null>(null);
   const previousDragActiveRef = useRef(false);
   const pointerInsideRef = useRef(false);
+  const lastNativeClickAtRef = useRef(0);
   const interactionCooldownsRef = useRef<Partial<Record<InteractionEventName, number>>>({});
   const clearIdleMotionTimer = useCallback((): void => {
     if (idleMotionTimerRef.current !== null) {
@@ -511,11 +556,77 @@ function PetRenderer({
         RUNTIME_SOURCE_PRIORITY[left.source] - RUNTIME_SOURCE_PRIORITY[right.source] ||
         statePriority(left.state, statesConfig) - statePriority(right.state, statesConfig)
     )[0] ?? null;
+  const reportPluginFeedback = useCallback(
+    (feedback: DeclarativePluginFeedback, status: 'accepted' | 'skipped' | 'interrupted', reason: string | null): void => {
+      window.companionAPI.reportDeclarativePluginFeedback({
+        feedbackId: feedback.id,
+        pluginId: feedback.pluginId,
+        status,
+        reason
+      });
+    },
+    []
+  );
+  const clearPluginFeedback = useCallback(
+    (reason: string): void => {
+      setActivePluginFeedback((current) => {
+        if (current) {
+          reportPluginFeedback(current, 'interrupted', reason);
+        }
+        return null;
+      });
+    },
+    [reportPluginFeedback]
+  );
+  useEffect(() => {
+    if (!pluginFeedback) {
+      return undefined;
+    }
+    const skipReason = runtimeOverride
+      ? 'runtime_override'
+      : interactionDragActive
+        ? 'user_drag_active'
+        : interactionMotionFolder || pointerInsideRef.current
+          ? 'user_interaction_active'
+          : pluginFeedback.action && !catalog.byFolder.has(pluginFeedback.action)
+            ? 'action_unavailable'
+            : null;
+    if (skipReason) {
+      reportPluginFeedback(pluginFeedback, 'skipped', skipReason);
+      return undefined;
+    }
+    clearIdleMotionTimer();
+    clearMotionSequence();
+    setActivePluginFeedback(pluginFeedback);
+    reportPluginFeedback(pluginFeedback, 'accepted', null);
+    const delayMs = Math.max(0, Date.parse(pluginFeedback.expiresAt) - Date.now());
+    const timer = window.setTimeout(() => {
+      setActivePluginFeedback((current) => (current?.id === pluginFeedback.id ? null : current));
+    }, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [
+    catalog,
+    clearIdleMotionTimer,
+    clearMotionSequence,
+    interactionDragActive,
+    interactionMotionFolder,
+    pluginFeedback,
+    reportPluginFeedback,
+    runtimeOverride
+  ]);
+  useEffect(() => {
+    if (runtimeOverride && activePluginFeedback) {
+      clearPluginFeedback('runtime_override');
+    }
+  }, [activePluginFeedback, clearPluginFeedback, runtimeOverride]);
+  const pluginOverride =
+    !runtimeOverride && !interactionDragActive && !interactionMotionFolder ? activePluginFeedback : null;
+  const pluginReactionState = pluginOverride?.reaction ? PLUGIN_REACTION_TO_STATE[pluginOverride.reaction] : undefined;
   const selection = manualSelection ?? defaultCatalogSelection(companionConfig.renderer.defaultState, catalog);
   const selectedFolder = selection.folder ?? selection.variant ?? keyframeFolderForState(selection.state);
   const exactManualFolder =
-    !runtimeOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
-  const canAutoSleep = !runtimeOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
+    !runtimeOverride && !pluginOverride && selectedFolder !== keyframeFolderForState(selection.state) ? selectedFolder : null;
+  const canAutoSleep = !runtimeOverride && !pluginOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
 
   useEffect(() => {
     if (!canAutoSleep) {
@@ -529,15 +640,18 @@ function PetRenderer({
     return () => window.clearTimeout(timer);
   }, [canAutoSleep, selection.state, selection.variant]);
 
-  const desiredState = runtimeOverride?.state ?? (autoSleep ? 'sleep' : selection.state);
-  const renderedState = exactManualFolder
-    ? renderedStateForMotion(exactManualFolder, desiredState)
-    : renderedStateForMotion(idleMotionFolder, desiredState);
+  const desiredState = runtimeOverride?.state ?? pluginReactionState ?? (autoSleep ? 'sleep' : selection.state);
+  const renderedState = pluginOverride?.action
+    ? renderedStateForMotion(pluginOverride.action, desiredState)
+    : exactManualFolder
+      ? renderedStateForMotion(exactManualFolder, desiredState)
+      : renderedStateForMotion(idleMotionFolder, desiredState);
   const canPlayIdleMotion =
-    desiredState === 'idle' && !runtimeOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
+    desiredState === 'idle' && !runtimeOverride && !pluginOverride && selection.state === 'idle' && !selection.variant && !exactManualFolder;
   const renderedVariant = !idleMotionFolder && !exactManualFolder && renderedState === 'idle' ? selection.variant : null;
   const manualActionKeyframe = exactManualFolder ? catalog.byFolder.get(exactManualFolder) : undefined;
   const activeMotionKeyframe = idleMotionFolder ? catalog.byFolder.get(idleMotionFolder) : undefined;
+  const pluginActionKeyframe = pluginOverride?.action ? catalog.byFolder.get(pluginOverride.action) : undefined;
   const dragHoldAction = interactionAction(interactionRules, DRAG_HOLD_EVENT);
   const interactionMotionKeyframe =
     !runtimeOverride && interactionMotionFolder ? catalog.byFolder.get(interactionMotionFolder) : undefined;
@@ -548,8 +662,9 @@ function PetRenderer({
       ? catalog.byFolder.get(DUCK_SIT_IDLE)
       : undefined;
   const activeKeyframe =
-    interactionMotionKeyframe ??
     interactionDragKeyframe ??
+    interactionMotionKeyframe ??
+    pluginActionKeyframe ??
     manualActionKeyframe ??
     activeMotionKeyframe ??
     (renderedState === 'idle' && renderedVariant ? catalog.byFolder.get(renderedVariant) : undefined) ??
@@ -578,8 +693,18 @@ function PetRenderer({
       if (!canInterruptRuntime(rule, runtimeOverride)) {
         return false;
       }
-      if (interactionMotionFolder && rule.interruptLevel !== 'high' && eventName !== 'mouse_leave') {
-        return false;
+      if (interactionMotionFolder) {
+        const hoverRule = interactionRules?.rules.mouse_hover;
+        const isHoverMotion =
+          interactionMotionFolder === hoverRule?.action || interactionMotionFolder === hoverRule?.holdAction;
+        const isClickEvent = eventName === 'click_head' || eventName === 'click_body';
+        if (isClickEvent && isHoverMotion) {
+          setInteractionMotionFolder(null);
+        } else if (eventName === 'mouse_leave' && !isHoverMotion) {
+          return false;
+        } else if (rule.interruptLevel !== 'high' && eventName !== 'mouse_leave') {
+          return false;
+        }
       }
 
       const now = Date.now();
@@ -589,6 +714,7 @@ function PetRenderer({
       }
 
       interactionCooldownsRef.current[eventName] = now;
+      clearPluginFeedback(`user_${eventName}`);
       clearIdleMotionTimer();
       clearMotionSequence();
       setInteractionMotionFolder(action);
@@ -596,6 +722,7 @@ function PetRenderer({
     },
     [
       catalog,
+      clearPluginFeedback,
       clearIdleMotionTimer,
       clearMotionSequence,
       interactionMotionFolder,
@@ -609,7 +736,10 @@ function PetRenderer({
     previousDragActiveRef.current = interactionDragActive;
 
     if (interactionDragActive && !wasDragging) {
-      startInteractionMotion(DRAG_START_EVENT);
+      clearPluginFeedback('user_drag_active');
+      clearIdleMotionTimer();
+      clearMotionSequence();
+      setInteractionMotionFolder(null);
       return;
     }
 
@@ -618,7 +748,7 @@ function PetRenderer({
         setInteractionMotionFolder(null);
       }
     }
-  }, [interactionDragActive, startInteractionMotion]);
+  }, [clearIdleMotionTimer, clearMotionSequence, clearPluginFeedback, interactionDragActive, startInteractionMotion]);
 
   useEffect(() => {
     const previousDesiredState = previousDesiredStateRef.current;
@@ -757,12 +887,46 @@ function PetRenderer({
     setIdleMotionFolder(null);
   }, [catalog, idleMotionFolder, interactionMotionFolder, interactionRules, runtimeOverride]);
 
+  const triggerClickAt = useCallback(
+    (point: MouseHitTestPoint): boolean => {
+      const regions = hitRegionsRef.current;
+      const clickPaddingPx = interactionRules?.hitZones?.clickPaddingPx ?? 0;
+      if (regions.length === 0 || !pointInHitRegions(point.x, point.y, regions, clickPaddingPx)) {
+        return false;
+      }
+
+      const bounds = unionHitRegionBounds(regions);
+      if (!bounds) {
+        return false;
+      }
+
+      const localY = point.y - bounds.y;
+      if (localY < 0 || localY > bounds.height) {
+        return false;
+      }
+
+      const clickHeadMaxYRatio = interactionRules?.hitZones?.clickHeadMaxYRatio ?? 0.38;
+      return startInteractionMotion(localY / bounds.height <= clickHeadMaxYRatio ? 'click_head' : 'click_body');
+    },
+    [interactionRules, startInteractionMotion]
+  );
+
+  useEffect(
+    () =>
+      window.companionAPI.onInteractionClick((point) => {
+        lastNativeClickAtRef.current = Date.now();
+        triggerClickAt(point);
+      }),
+    [triggerClickAt]
+  );
+
   if (!activeKeyframe) {
     return null;
   }
 
   const bubbleMessage =
-    runtimeOverride?.source === 'reminder' && reminderOverride
+    pluginOverride?.message ??
+    (runtimeOverride?.source === 'reminder' && reminderOverride
       ? reminderOverride.message
         : runtimeOverride?.source === 'task' && taskOverride
           ? taskOverride.message
@@ -770,17 +934,46 @@ function PetRenderer({
             runtimeOverride?.source === 'agent' ? agentOverride : null,
             runtimeOverride?.source === 'codex' ? codexOverride : null,
             renderedState
-          );
+          ));
   const handlePointerEnter = useCallback((): void => {
     pointerInsideRef.current = true;
+    clearPluginFeedback('user_hover');
     startInteractionMotion('mouse_hover');
-  }, [startInteractionMotion]);
+  }, [clearPluginFeedback, startInteractionMotion]);
   const handlePointerLeave = useCallback((): void => {
     pointerInsideRef.current = false;
     if (!startInteractionMotion('mouse_leave')) {
       setInteractionMotionFolder(null);
     }
   }, [startInteractionMotion]);
+  const handlePointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>): void => {
+      if (
+        event.button !== 0 ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        interactionDragActive ||
+        Date.now() - lastNativeClickAtRef.current < 250
+      ) {
+        return;
+      }
+
+      triggerClickAt({ x: event.clientX, y: event.clientY });
+    },
+    [interactionDragActive, triggerClickAt]
+  );
+  const handleHitRegionsChange = useCallback(
+    (regions: MouseHitRegion[]): void => {
+      if (regions.length === 0 && hitRegionsRef.current.length > 0) {
+        return;
+      }
+      hitRegionsRef.current = regions;
+      onHitRegionsChange(regions);
+    },
+    [onHitRegionsChange]
+  );
 
   return (
     <main className="companion-shell">
@@ -788,14 +981,15 @@ function PetRenderer({
         className="companion-stage"
         onPointerEnter={handlePointerEnter}
         onPointerLeave={handlePointerLeave}
+        onPointerDown={handlePointerDown}
       >
         <Companion
-          key={`${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? 'dragging' : (selection.replayId ?? 0)}`}
+          key={`${renderedState}:${activeKeyframe.folder}:${interactionDragActive ? 'dragging' : (pluginOverride?.id ?? selection.replayId ?? 0)}`}
           keyframe={activeKeyframe}
           canvas={companionConfig.renderer.keyframeCanvas}
           state={renderedState}
           onHitTesterChange={() => undefined}
-          onHitRegionsChange={onHitRegionsChange}
+          onHitRegionsChange={handleHitRegionsChange}
           onMotionComplete={handleMotionComplete}
         />
       </div>
@@ -811,6 +1005,7 @@ function PetApp(): ReactElement | null {
   const [interactionRules, setInteractionRules] = useState<InteractionRulesConfig | null>(null);
   const [manualSelection, setManualSelection] = useState<ManualRenderSelection | null>(null);
   const [interactionDragActive, setInteractionDragActive] = useState(false);
+  const [pluginFeedback, setPluginFeedback] = useState<DeclarativePluginFeedback | null>(null);
   const { codexState, agentState, reminderState, taskNotification } = useRuntimeState();
   const { keyframes, catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
@@ -844,9 +1039,27 @@ function PetApp(): ReactElement | null {
   }, [loadPetConfig]);
   useEffect(() => window.companionAPI.onManualRenderSelection(setManualSelection), []);
   useEffect(() => window.companionAPI.onInteractionDragActive(setInteractionDragActive), []);
+  useEffect(() => window.companionAPI.onDeclarativePluginFeedback(setPluginFeedback), []);
+  const nativeClickCaptureEnabled = Boolean(
+    interactionRules?.enabled &&
+      interactionRules.rules.click_head?.action &&
+      interactionRules.rules.click_body?.action
+  );
+  useEffect(() => {
+    window.companionAPI.setNativeClickCapture(nativeClickCaptureEnabled).catch((error: unknown) => {
+      console.error('Failed to update native click capture', error);
+    });
+
+    return () => {
+      window.companionAPI.setNativeClickCapture(false).catch((error: unknown) => {
+        console.error('Failed to disable native click capture', error);
+      });
+    };
+  }, [nativeClickCaptureEnabled]);
   useEffect(
     () =>
       window.companionAPI.onPetProfileChanged(() => {
+        setInteractionRules(null);
         loadPetConfig().catch((error: unknown) => console.error('Failed to reload pet profile', error));
       }),
     [loadPetConfig]
@@ -871,6 +1084,7 @@ function PetApp(): ReactElement | null {
       agentState={agentState}
       reminderState={reminderState}
       taskNotification={taskNotification}
+      pluginFeedback={pluginFeedback}
       interactionDragActive={interactionDragActive}
       interactionRules={interactionRules}
       keyframes={keyframes}
@@ -885,6 +1099,8 @@ function SettingsModule({
   permissionStatus,
   petProfiles,
   onSelectPetProfile,
+  onImportPetProfile,
+  onRemovePetProfile,
   onUpdateShortcut,
   onResetShortcut
 }: {
@@ -892,6 +1108,8 @@ function SettingsModule({
   permissionStatus: InputPermissionStatus;
   petProfiles: PetProfileState | null;
   onSelectPetProfile: (profileId: string) => void;
+  onImportPetProfile: () => Promise<void>;
+  onRemovePetProfile: (profileId: string) => Promise<void>;
   onUpdateShortcut: (id: string, accelerator: string) => Promise<void>;
   onResetShortcut: (id: string) => Promise<void>;
 }): ReactElement {
@@ -915,6 +1133,24 @@ function SettingsModule({
       setDrafts((current) => ({ ...current, [shortcut.id]: shortcut.defaultAccelerator }));
     } catch (resetError) {
       setError(resetError instanceof Error ? resetError.message : '快捷键重置失败');
+    }
+  }
+
+  async function importPetProfile(): Promise<void> {
+    setError(null);
+    try {
+      await onImportPetProfile();
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : '角色包导入失败');
+    }
+  }
+
+  async function removePetProfile(profileId: string): Promise<void> {
+    setError(null);
+    try {
+      await onRemovePetProfile(profileId);
+    } catch (removeError) {
+      setError(removeError instanceof Error ? removeError.message : '角色包移除失败');
     }
   }
 
@@ -945,21 +1181,45 @@ function SettingsModule({
 
       {petProfiles ? (
         <div className="profile-card">
-          <p className="settings-module__title">桌宠形象</p>
+          <div className="profile-card__header">
+            <div>
+              <p className="settings-module__title">桌宠形象</p>
+              <p className="settings-module__meta">本地角色包可导入；缺非核心视频时保留 warning。</p>
+            </div>
+            <button className="mini-button mini-button--primary" type="button" onClick={importPetProfile}>
+              导入
+            </button>
+          </div>
           <div className="profile-list">
             {petProfiles.profiles.map((profile) => (
-              <button
-                className={profile.selected ? 'profile-option profile-option--active' : 'profile-option'}
-                disabled={profile.selected || !profile.ready}
-                key={profile.id}
-                type="button"
-                onClick={() => onSelectPetProfile(profile.id)}
-              >
-                <span className="profile-option__label">{profile.label}</span>
-                <span className="profile-option__meta">
-                  {profile.ready ? (profile.selected ? '使用中' : '可切换') : profile.reason}
-                </span>
-              </button>
+              <div className="profile-option-row" key={profile.id}>
+                <button
+                  className={profile.selected ? 'profile-option profile-option--active' : 'profile-option'}
+                  disabled={profile.selected || !profile.ready}
+                  type="button"
+                  onClick={() => onSelectPetProfile(profile.id)}
+                >
+                  <span className="profile-option__label">{profile.label}</span>
+                  <span className="profile-option__meta">
+                    {profile.source === 'installed' ? `本地包 ${profile.profileVersion ?? ''}` : '内置角色'}
+                    {' · '}
+                    {profile.ready ? (profile.selected ? '使用中' : '可切换') : profile.reason}
+                  </span>
+                  {profile.warnings.map((warning) => (
+                    <span className="profile-option__warning" key={warning}>{warning}</span>
+                  ))}
+                </button>
+                {profile.removable ? (
+                  <button
+                    aria-label={`移除 ${profile.label}`}
+                    className="mini-button profile-remove-button"
+                    type="button"
+                    onClick={() => removePetProfile(profile.id)}
+                  >
+                    移除
+                  </button>
+                ) : null}
+              </div>
             ))}
           </div>
         </div>
@@ -1047,13 +1307,18 @@ function IntegrationsModule({
           <span>Runtime {agentState?.state ?? '-'}</span>
           <span>Expires {agentState?.expiresAt ? new Date(agentState.expiresAt).toLocaleTimeString() : '-'}</span>
         </div>
+        <div className="integration-facts">
+          <span>Policy {protocolStatus?.permissionPolicy.enabled ? 'on' : '-'}</span>
+          <span>Blocked {protocolStatus?.permissionPolicy.blockedMethods.length ?? 0}</span>
+          <span>Confirm {protocolStatus?.permissionPolicy.confirmationRequiredMethods.length ?? 0}</span>
+        </div>
         {protocolStatus?.lastError ? <p className="settings-module__error">{protocolStatus.lastError}</p> : null}
       </div>
 
       <div className="integration-card">
         <p className="settings-module__title">MCP stdio</p>
         <p className="settings-module__meta">{mcpCommand}</p>
-        <p className="settings-module__meta">可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_profile_list / companion_profile_capabilities / companion_profile_select</p>
+        <p className="settings-module__meta">可用工具：companion_status / companion_react / companion_say / companion_agent_set_state / companion_agent_get_state / companion_agent_clear_state / companion_confirm_request / companion_confirm_get / companion_confirm_cancel / companion_context_summary / companion_activity_list / companion_permissions_summary / companion_plugins_summary / companion_profile_list / companion_profile_capabilities / companion_profile_select</p>
       </div>
 
       <div className={activeConfirmation?.status === 'pending' ? 'integration-card integration-card--attention' : 'integration-card'}>
@@ -1099,6 +1364,96 @@ function IntegrationsModule({
   );
 }
 
+function PluginsModule({
+  summary,
+  onToggle,
+  onRefresh
+}: {
+  summary: DeclarativePluginSummary | null;
+  onToggle: (pluginId: string, enabled: boolean) => Promise<void>;
+  onRefresh: () => Promise<void>;
+}): ReactElement {
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <section className="settings-module">
+      <header className="control-module__header plugin-module__header">
+        <div>
+          <p className="status-panel__eyebrow">V1.4</p>
+          <h1 className="status-panel__title">声明式插件</h1>
+        </div>
+        <button
+          className="mini-button mini-button--primary"
+          type="button"
+          onClick={() => {
+            setError(null);
+            onRefresh().catch((refreshError: unknown) => {
+              setError(refreshError instanceof Error ? refreshError.message : '插件刷新失败');
+            });
+          }}
+        >
+          刷新
+        </button>
+      </header>
+
+      <div className={summary?.enabled ? 'integration-card integration-card--active' : 'integration-card'}>
+        <p className="settings-module__title">Declarative Plugin Runtime</p>
+        <p className="settings-module__meta">
+          {summary?.enabled ? '已启用' : '未启用'} · 已加载 {summary?.pluginCount ?? 0} · 已开启 {summary?.enabledCount ?? 0}
+        </p>
+        <p className="settings-module__meta">只扫描本地 JSON manifest；不执行脚本，不发起网络请求，不写入插件文件。</p>
+      </div>
+
+      {error ? <p className="settings-module__error">{error}</p> : null}
+
+      <div className="plugin-list">
+        {(summary?.plugins ?? []).map((plugin) => (
+          <div className={plugin.enabled ? 'plugin-card plugin-card--active' : 'plugin-card'} key={plugin.id}>
+            <div className="plugin-card__header">
+              <div>
+                <p className="settings-module__title">{plugin.label}</p>
+                <p className="settings-module__meta">{plugin.id} · {plugin.source === 'builtin' ? '内置' : '本地'} · v{plugin.version}</p>
+              </div>
+              <button
+                className={plugin.enabled ? 'mini-button mini-button--primary' : 'mini-button'}
+                type="button"
+                onClick={() => {
+                  setError(null);
+                  onToggle(plugin.id, !plugin.enabled).catch((toggleError: unknown) => {
+                    setError(toggleError instanceof Error ? toggleError.message : '插件开关失败');
+                  });
+                }}
+              >
+                {plugin.enabled ? '关闭' : '开启'}
+              </button>
+            </div>
+            <p className="settings-module__meta">{plugin.description}</p>
+            <div className="integration-facts">
+              {plugin.permissions.map((permission) => <span key={permission}>{permission}</span>)}
+              {plugin.profileIds.map((profileId) => <span key={profileId}>profile:{profileId}</span>)}
+            </div>
+            <p className="settings-module__meta">
+              最近触发 {plugin.lastTriggeredAt ? new Date(plugin.lastTriggeredAt).toLocaleTimeString() : '-'}
+            </p>
+            {plugin.lastError ? <p className="settings-module__error">{plugin.lastError}</p> : null}
+          </div>
+        ))}
+      </div>
+
+      {(summary?.recentErrors ?? []).length > 0 ? (
+        <div className="integration-card integration-card--attention">
+          <p className="settings-module__title">最近加载错误</p>
+          {summary?.recentErrors.map((item) => (
+            <p className="settings-module__error" key={`${item.source}:${item.file}:${item.message}`}>
+              {item.source}:{item.file} · {item.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function ControlCenterApp(): ReactElement | null {
   const [companionConfig, setCompanionConfig] = useState<CompanionConfig | null>(null);
   const [statesConfig, setStatesConfig] = useState<StatesConfig | null>(null);
@@ -1111,6 +1466,7 @@ function ControlCenterApp(): ReactElement | null {
   const [petProfiles, setPetProfiles] = useState<PetProfileState | null>(null);
   const [protocolStatus, setProtocolStatus] = useState<CompanionProtocolStatus | null>(null);
   const [agentConfirmation, setAgentConfirmation] = useState<AgentConfirmation | null>(null);
+  const [declarativePlugins, setDeclarativePlugins] = useState<DeclarativePluginSummary | null>(null);
   const { reminderState, reminders, taskNotification, tasks, refreshReminders, refreshTasks } = useRuntimeState();
   const { catalog } = useCompanionCatalog(companionConfig, statesConfig, actionRegistry);
 
@@ -1125,7 +1481,8 @@ function ControlCenterApp(): ReactElement | null {
       nextPermissionStatus,
       nextPetProfiles,
       nextProtocolStatus,
-      nextAgentConfirmation
+      nextAgentConfirmation,
+      nextDeclarativePlugins
     ] = await Promise.all([
       window.companionAPI.getCompanionConfig(),
       window.companionAPI.getStatesConfig(),
@@ -1136,7 +1493,8 @@ function ControlCenterApp(): ReactElement | null {
       window.companionAPI.getInputPermissionStatus(),
       window.companionAPI.getPetProfiles(),
       window.companionAPI.getCompanionProtocolStatus(),
-      window.companionAPI.getAgentConfirmation()
+      window.companionAPI.getAgentConfirmation(),
+      window.companionAPI.getDeclarativePlugins()
     ]);
 
     setCompanionConfig(nextCompanionConfig);
@@ -1149,6 +1507,7 @@ function ControlCenterApp(): ReactElement | null {
     setPetProfiles(nextPetProfiles);
     setProtocolStatus(nextProtocolStatus);
     setAgentConfirmation(nextAgentConfirmation);
+    setDeclarativePlugins(nextDeclarativePlugins);
   }, []);
 
   useEffect(() => {
@@ -1178,6 +1537,7 @@ function ControlCenterApp(): ReactElement | null {
   useEffect(() => window.companionAPI.onInputPermissionStatus(setPermissionStatus), []);
   useEffect(() => window.companionAPI.onCompanionProtocolStatus(setProtocolStatus), []);
   useEffect(() => window.companionAPI.onAgentConfirmation(setAgentConfirmation), []);
+  useEffect(() => window.companionAPI.onDeclarativePluginsUpdated(setDeclarativePlugins), []);
 
   const respondAgentConfirmation = useCallback(async (requestId: string, action: AgentConfirmationAction): Promise<void> => {
     setAgentConfirmation(await window.companionAPI.respondAgentConfirmation(requestId, action));
@@ -1210,6 +1570,20 @@ function ControlCenterApp(): ReactElement | null {
       .setPetProfile(profileId)
       .then(setPetProfiles)
       .catch((error: unknown) => console.error('Failed to update pet profile', error));
+  }, []);
+
+  const importPetProfile = useCallback(async (): Promise<void> => {
+    setPetProfiles(await window.companionAPI.importPetProfile());
+  }, []);
+
+  const removePetProfile = useCallback(async (profileId: string): Promise<void> => {
+    setPetProfiles(await window.companionAPI.removePetProfile(profileId));
+  }, []);
+  const toggleDeclarativePlugin = useCallback(async (pluginId: string, enabled: boolean): Promise<void> => {
+    setDeclarativePlugins(await window.companionAPI.setDeclarativePluginEnabled(pluginId, enabled));
+  }, []);
+  const refreshDeclarativePlugins = useCallback(async (): Promise<void> => {
+    setDeclarativePlugins(await window.companionAPI.refreshDeclarativePlugins());
   }, []);
 
   const createReminder = useCallback(
@@ -1369,12 +1743,21 @@ function ControlCenterApp(): ReactElement | null {
             protocolStatus={protocolStatus}
           />
         ) : null}
+        {activeModule === 'plugins' ? (
+          <PluginsModule
+            summary={declarativePlugins}
+            onToggle={toggleDeclarativePlugin}
+            onRefresh={refreshDeclarativePlugins}
+          />
+        ) : null}
         {activeModule === 'settings' ? (
           <SettingsModule
             shortcuts={shortcuts}
             permissionStatus={permissionStatus}
             petProfiles={petProfiles}
             onSelectPetProfile={updatePetProfile}
+            onImportPetProfile={importPetProfile}
+            onRemovePetProfile={removePetProfile}
             onUpdateShortcut={updateShortcut}
             onResetShortcut={resetShortcut}
           />

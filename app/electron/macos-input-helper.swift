@@ -20,7 +20,7 @@ struct HitRegion {
   let height: Double
 
   func contains(local point: CGPoint) -> Bool {
-    let padding = 8.0
+    let padding = 10.0
     return point.x >= x - padding &&
       point.x <= x + width + padding &&
       point.y >= y - padding &&
@@ -33,6 +33,8 @@ final class SharedState {
   private var modifier: CGEventFlags = .maskAlternate
   private var bounds: HitBounds?
   private var regions: [HitRegion] = []
+  private var clickCaptureEnabled = false
+  private var clicking = false
   private var dragging = false
   private var suppressRightUp = false
   private var inputBuffer = ""
@@ -57,6 +59,15 @@ final class SharedState {
     return flags.contains(required)
   }
 
+  func shouldCaptureClick(_ flags: CGEventFlags, at point: CGPoint) -> Bool {
+    let blockedModifiers: CGEventFlags = [.maskAlternate, .maskCommand, .maskControl, .maskShift]
+    lock.lock()
+    let enabled = clickCaptureEnabled
+    lock.unlock()
+
+    return enabled && flags.intersection(blockedModifiers).isEmpty && hitTest(point)
+  }
+
   func hitTest(_ point: CGPoint) -> Bool {
     lock.lock()
     let currentBounds = bounds
@@ -68,7 +79,7 @@ final class SharedState {
     }
 
     if currentRegions.isEmpty {
-      return true
+      return false
     }
 
     let localPoint = CGPoint(x: point.x - currentBounds.x, y: point.y - currentBounds.y)
@@ -79,6 +90,27 @@ final class SharedState {
     lock.lock()
     dragging = true
     lock.unlock()
+  }
+
+  func beginClick() {
+    lock.lock()
+    clicking = true
+    lock.unlock()
+  }
+
+  func isClicking() -> Bool {
+    lock.lock()
+    let value = clicking
+    lock.unlock()
+    return value
+  }
+
+  func consumeClick() -> Bool {
+    lock.lock()
+    let value = clicking
+    clicking = false
+    lock.unlock()
+    return value
   }
 
   func endDrag() {
@@ -122,11 +154,14 @@ final class SharedState {
 
     switch type {
     case "config":
+      lock.lock()
       if let modifierName = payload["modifier"] as? String {
-        lock.lock()
         modifier = modifierFlags(from: modifierName)
-        lock.unlock()
       }
+      if let enabled = payload["clickCaptureEnabled"] as? Bool {
+        clickCaptureEnabled = enabled
+      }
+      lock.unlock()
     case "regions":
       let nextBounds = parseBounds(payload["bounds"])
       let nextRegions = (payload["regions"] as? [[String: Any]] ?? []).compactMap(parseRegion)
@@ -237,25 +272,33 @@ let callback: CGEventTapCallBack = { _, type, event, userInfo in
 
   switch type {
   case .leftMouseDown:
-    guard state.flagsMatch(event.flags), state.hitTest(location) else {
-      return Unmanaged.passUnretained(event)
+    if state.flagsMatch(event.flags), state.hitTest(location) {
+      state.beginDrag()
+      emit(["type": "leftDown", "x": location.x, "y": location.y])
+      return nil
     }
-    state.beginDrag()
-    emit(["type": "leftDown", "x": location.x, "y": location.y])
-    return nil
+    if state.shouldCaptureClick(event.flags, at: location) {
+      state.beginClick()
+      return nil
+    }
+    return Unmanaged.passUnretained(event)
   case .leftMouseDragged:
-    guard state.isDragging() else {
-      return Unmanaged.passUnretained(event)
+    if state.isDragging() {
+      emit(["type": "leftDragged", "x": location.x, "y": location.y])
+      return nil
     }
-    emit(["type": "leftDragged", "x": location.x, "y": location.y])
-    return nil
+    return state.isClicking() ? nil : Unmanaged.passUnretained(event)
   case .leftMouseUp:
-    guard state.isDragging() else {
-      return Unmanaged.passUnretained(event)
+    if state.isDragging() {
+      state.endDrag()
+      emit(["type": "leftUp", "x": location.x, "y": location.y])
+      return nil
     }
-    state.endDrag()
-    emit(["type": "leftUp", "x": location.x, "y": location.y])
-    return nil
+    if state.consumeClick() {
+      emit(["type": "leftClick", "x": location.x, "y": location.y])
+      return nil
+    }
+    return Unmanaged.passUnretained(event)
   case .rightMouseDown:
     guard state.flagsMatch(event.flags), state.hitTest(location) else {
       return Unmanaged.passUnretained(event)

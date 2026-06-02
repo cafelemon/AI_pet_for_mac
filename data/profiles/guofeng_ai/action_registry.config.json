@@ -436,8 +436,8 @@
         "assets/profiles/guofeng_ai/actions/interactions/click_head_happy/source/click_head_happy_source.mp4"
       ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },
@@ -452,8 +452,8 @@
         "assets/profiles/guofeng_ai/actions/interactions/click_body_confused/source/click_body_confused_source.mp4"
       ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },
@@ -468,8 +468,8 @@
         "assets/profiles/guofeng_ai/actions/interactions/drag_start_lift/source/drag_start_lift_source.mp4"
       ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },
@@ -484,8 +484,8 @@
         "assets/profiles/guofeng_ai/actions/interactions/drag_end_dizzy/source/drag_end_dizzy_source.mp4"
       ],
       "playback": "one_shot",
-      "runtime": false,
-      "available": false,
+      "runtime": true,
+      "available": true,
       "protect": false,
       "returnTo": "idle"
     },

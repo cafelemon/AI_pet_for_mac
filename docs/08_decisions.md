@@ -213,7 +213,7 @@ AI/Agent 接入后的 `say` 类能力必须经过安全校验和 cooldown。
 
 原因：
 
-- 视频 AI 额度未刷新前，不应为了 click/drag 缺素材阻塞下一环。
+- 视频 AI 额度未刷新前，不应为了当时的 click/drag 缺素材阻塞下一环。
 - 当前 MCP 已完成 L1 遥控能力，但需要先明确 L2-L5 的产品边界和安全口径。
 - 先做蓝图可以避免后续盲目增加 `say` 类工具，把桌宠做成普通消息喇叭。
 
@@ -222,7 +222,7 @@ AI/Agent 接入后的 `say` 类能力必须经过安全校验和 cooldown。
 - 新增 `docs/09_mcp_capability_blueprint.md`。
 - 后续 MCP 实施优先从 agent 状态面板开始，再做确认流、事件与 companion kernel。
 - 新增 MCP 方法前必须同步 local protocol、stdio adapter、contract check 和 Codex MCP 实机 smoke test。
-- click/drag 缺素材动作继续留在 `V1.2.0`，不得标记 runtime ready。
+- 当时 click/drag 缺素材动作继续留在 `V1.2.0`，不得标记 runtime ready；当前已在 `V1.2.0` 补齐并改为 ready。
 
 ## D014：V1.1.5 先实现 MCP Agent 状态面板
 
@@ -277,7 +277,7 @@ AI/Agent 接入后的 `say` 类能力必须经过安全校验和 cooldown。
 
 影响：
 
-- `V1.2.0` click/drag 缺素材继续保持待补，不标记 runtime ready。
+- 当时 `V1.2.0` click/drag 缺素材继续保持待补，不标记 runtime ready；当前已在 `V1.2.0` 补齐。
 - 活动记录只保存在 Electron main 内存 ring buffer，不落盘、不跨重启。
 - `context.summary` 必须避免 token、socket path、discovery path、绝对路径和长日志。
 - 后续如需实时事件订阅，单独进入 `companion.events.subscribe` 设计。
@@ -301,3 +301,146 @@ AI/Agent 接入后的 `say` 类能力必须经过安全校验和 cooldown。
 - `context.summary` 增加精简 `profileCapabilitiesSummary`。
 - 返回内容不得包含 token、socket path、discovery path、绝对素材路径或本地 cwd。
 - `companion.events.subscribe` 仍未实现，作为 L4 后续 TODO 单独保留。
+
+## D018：V1.1.9 先做最小 Permission Policy，不做完整权限弹窗
+
+决定：
+
+`V1.1.9` 新增 `data/config/permission_policy.config.json`，并通过 `companion.permissions.summary` / `companion_permissions_summary` 暴露给本地 agent。
+
+原因：
+
+- 当前 MCP 能力已经可调用、可声明，需要进入可治理阶段。
+- 默认不阻断既有能力，避免破坏 Codex MCP 已验证链路。
+- 方法风险分层能为后续插件、偏好、App Store 权限说明和强制确认策略打基础。
+
+影响：
+
+- 所有 `COMPANION_PROTOCOL_METHODS` 都必须有 permission rule。
+- Electron main 在执行 local protocol method 前做最小 allow/deny 检查。
+- disabled method 返回 permission denied 并记录 activity。
+- `requiresConfirmation` 当前只作为声明和未来能力预留，不代表完整权限弹窗已实现。
+
+## D019：V1.2.0 补齐 guofeng_ai 用户交互动作
+
+决定：
+
+`V1.2.0` 使用用户提供的四个古风视频补齐 click/drag 交互动作，并只对 `guofeng_ai` 启用完整用户交互链路。
+
+原因：
+
+- 四个缺失 source 已到位，继续停留在 video blocked 会阻塞交互板块验收。
+- 点击与拖拽是桌宠从状态展示走向“可回应用户”的核心体验。
+- 拖动动作需要按首尾帧实际人物大小和位置链式对齐，否则 start/hold/end 会出现跳位。
+
+影响：
+
+- `click_head_happy`、`click_body_confused`、`drag_start_lift`、`drag_end_dizzy` 标记 runtime ready。
+- `drag_start_lift` 和 `drag_end_dizzy` 使用 `2.0x` 输出加速，原始 source 不覆盖。
+- `drag_hold_lift` 重新校准，以衔接 `drag_start_lift` 尾帧和 `drag_end_dizzy` 首帧。
+- `legacy_real` 继续保持保守交互声明，不继承古风 profile 的 click/drag 能力。
+
+## D020：V1.2.1 区分 Codex 权限请求与 MCP 确认流
+
+决定：
+
+Codex PermissionRequest 继续映射为 `waiting_auth` 动作表达，但文案明确提示用户在 Codex 中确认；只有 MCP `companion.confirm.request` 才打开控制中心确认卡片。
+
+原因：
+
+- 两条链路共用 `waiting_auth` 视觉状态，但用户响应入口不同。
+- Codex hook 写入的等待状态此前没有过期规则，app 重启后可能显示旧授权提示。
+
+影响：
+
+- Codex PermissionRequest 写入 60 秒 `expiresAt`。
+- Electron main 兼容清理旧格式中超过 60 秒的无 `expiresAt` `waiting_auth`。
+- MCP confirmation 行为保持不变。
+
+## D021：V1.2.2 使用原生精准点击捕获
+
+决定：
+
+普通左键点击人物 alpha 区域时，由 macOS input helper 精准拦截并转发给 renderer；人物外透明区域继续穿透。Option + 左键仍用于抓起拖动。
+
+原因：
+
+- 智能穿透依赖轮询切换窗口 ignore 状态，第一下点击可能落到桌面并触发 macOS 显示桌面。
+- 整窗拦截会破坏透明区域的桌面操作体验。
+- 原生 helper 已负责 Option 拖动，复用它可以在事件进入桌面前完成精准拦截。
+
+影响：
+
+- 只有具备 click rules 的 profile 开启 native click capture；`legacy_real` 不吞掉普通点击。
+- `drag_start_lift` 提升为相对原始 source 的 `6.0x`。
+- `mouse_leave_back` 保留临时运行，但进入待替换素材清单。
+
+## D022：V1.2.3 点击区域按人物实体 bbox 校准
+
+决定：
+
+点击头部和身体的分流基于当前人物 alpha regions 的实体 bbox。`guofeng_ai` 头部区间配置为顶部 `34%`，轮廓容差为 `10px`；动作切换时保留上一帧有效 regions。
+
+原因：
+
+- 桌宠整窗包含大量透明区域，不能作为头部比例参照。
+- 害羞动作切换时 regions 会异步重建，临时清空会让小面积头部更容易点空。
+
+影响：
+
+- 点击区间进入 profile-scoped `interaction_rules.config.json`，后续角色可独立调参。
+- 身体点击行为保持不变，头部点击更稳定。
+
+## D023：拖动开始直接进入保持循环
+
+决定：
+
+`guofeng_ai` 拖动激活时直接进入 `drag_hold_lift` 循环，不再派发 `drag_start_lift`；拖动释放后仍播放 `drag_end_dizzy`。
+
+原因：
+
+- 拖动起始衔接态会延迟人物跟手反馈。
+- 保留释放后的收尾动作可以维持落地动作的完整性。
+
+影响：
+
+- `drag_start_lift` 素材保留，但不再属于当前 runtime 拖动链路。
+- 当前拖动链路调整为 `drag_hold_lift -> drag_end_dizzy`。
+
+## D024：V1.3.0 本地 Profile Package 使用受控安装目录
+
+决定：
+
+角色包采用 `.companion-profile.zip` 本地单文件格式。导入包安装到 Electron `userData/profiles/<profileId>/`，通过受控 asset namespace 读取，不把本机绝对路径暴露给 renderer 或 MCP。
+
+原因：
+
+- 后续 App Store、开源核心和独立素材分发需要明确的角色包边界。
+- 视频供给不能阻塞代码层迭代，缺非核心素材应表现为 warning。
+- 本地导入属于高风险文件入口，需要先建立路径与文件类型治理。
+
+影响：
+
+- 内置 profile 不允许覆盖或移除。
+- 包内路径必须为相对路径，拒绝路径穿越、符号链接和可执行脚本。
+- 缺少 `idle` 或必需配置时不可切换；缺非核心视频只进入 manifest 和视频台账。
+- MCP 保持只读查询与 ready profile 切换，不开放包安装能力。
+
+## D025：V1.4.0 插件只开放声明式展示反馈
+
+决定：
+
+`V1.4.0` 插件只允许通过 JSON manifest 声明 trigger 与展示 effect。Electron main 负责校验、调度、cooldown、TTL、启停持久化和 activity；renderer 只接收验证后的低优先级反馈。
+
+原因：
+
+- 插件内核需要先形成可治理边界，再讨论更高风险扩展。
+- 桌宠反馈不应抢占 reminder、task、agent、Codex 或用户交互。
+- 视频素材缺口不应阻塞代码层插件能力推进。
+
+影响：
+
+- 当前不开放 JS、shell、动态模块、网络请求、文件写入、业务写操作或插件压缩包导入。
+- 本地插件 ID 与内置插件冲突时拒绝加载，内置插件优先。
+- 冲突反馈直接跳过并写入 activity，不排队补播。
+- L4 `companion.events.subscribe` 继续保留为后续 TODO。
